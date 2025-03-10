@@ -139,6 +139,87 @@ To connect to Overseerr:
 4. Copy the API key to your `.env` file as `OVERSEERR_API_KEY`
 5. Add your Overseerr URL to `.env` as `OVERSEERR_URL` (e.g., `https://overseerr.yourdomain.com`)
 
+## Tautulli Webhook Setup
+
+To receive notifications when new media is added to your Plex server, you need to configure Tautulli webhooks:
+
+1. Access your Tautulli web interface
+2. Go to Settings > Notification Agents
+3. Click "Add a new notification agent" and select "Webhook"
+4. Configure the webhook with the following settings:
+
+### Configuration Tab
+- **Webhook URL**: `http://your-server-ip:WEBHOOK_PORT/webhook` (replace with your server IP and the port specified in your .env file)
+- **Webhook Method**: POST
+- **Content Type**: application/json
+
+### Triggers Tab
+- Enable the **Recently Added** trigger
+
+### Conditions Tab (Optional)
+- Configure any additional filtering conditions if needed (e.g., specific libraries)
+
+### Data Tab
+- Under **JSON Data**, paste exactly the following:
+
+```json
+{
+  "event": "library.new",
+  "user": true,
+  "owner": true,
+  "Account": {
+    "id": "{user_id}",
+    "title": "{user}"
+  },
+  "Server": {
+    "title": "{server_name}",
+    "uuid": "{server_id}"
+  },
+  "Player": {
+    "local": true,
+    "publicAddress": "{public_ip}",
+    "title": "{player_name}",
+    "uuid": "{player_id}"
+  },
+  "Metadata": {
+    "librarySectionType": "{library_type}",
+    "ratingKey": "{rating_key}",
+    "key": "{key}",
+    "guid": "{guid}",
+    "librarySectionID": "{section_id}",
+    "type": "{type}",
+    "title": "{title}",
+    "grandparentTitle": "{grandparent_title}",
+    "parentTitle": "{parent_title}",
+    "summary": "{summary}",
+    "index": "{episode_num}",
+    "parentIndex": "{season_num}",
+    "year": "{year}",
+    "thumb": "{thumb}",
+    "art": "{art}",
+    "grandparentThumb": "{grandparent_thumb}",
+    "grandparentArt": "{grandparent_art}",
+    "addedAt": "{added_at}",
+    "updatedAt": "{updated_at}"
+  }
+}
+```
+
+> **IMPORTANT**: The JSON structure must match exactly as shown above for the webhook to work properly.
+
+5. Click "Save" to save your webhook configuration
+6. Test the webhook by adding a new media item to your Plex library or using Tautulli's test feature
+
+### Testing Your Webhook
+
+After setting up the webhook:
+1. In Tautulli, navigate to your configured webhook
+2. Click the "Test Notifications" button (bell icon)
+3. Select "Recently Added" from the dropdown menu
+4. Check the bot logs for webhook receipt confirmation: `npx pm2 logs`
+
+If configured correctly, the webhook should trigger the notification service in PlexMate.
+
 ## Setup Instructions
 
 1. Clone the repository
