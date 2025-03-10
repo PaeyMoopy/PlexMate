@@ -250,7 +250,7 @@ To backup your data, simply copy the `data/bot.db` file to a safe location.
 2. **Media requests failing**
    - Verify your Overseerr URL and API key are correct
    - Check that your TMDB API key is valid
-   - Look for errors in the bot logs: `pm2 logs`
+   - Look for errors in the bot logs: `npx pm2 logs`
 
 3. **User mapping not working**
    - Ensure OVERSEERR_USER_MAP is in valid JSON format
@@ -258,6 +258,6 @@ To backup your data, simply copy the `data/bot.db` file to a safe location.
    - Verify Discord user IDs are correct (enable Developer Mode in Discord settings to copy IDs)
 
 4. **Bot not starting automatically**
-   - On Linux, run `pm2 startup` and follow the instructions
-   - After starting the bot, run `pm2 save` to save the current process list
-   - Check the PM2 logs for any error messages: `pm2 logs`
+   - On Linux, run `npx pm2 startup` and follow the instructions
+   - After starting the bot, run `npx pm2 save` to save the current process list
+   - Check the PM2 logs for any error messages: `npx pm2 logs`
