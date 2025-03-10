@@ -76,7 +76,7 @@ npm -v  # Should show compatible npm version
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/PaeyMoopy/Plexcord.git
+git clone https://github.com/PaeyMoopy/PlexMate.git
 ```
 ```bash
 # 2. Navigate to project directory
