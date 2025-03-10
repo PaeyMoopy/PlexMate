@@ -1,4 +1,16 @@
 # PlexMate
+Screenshots:
+
+
+![image](https://github.com/user-attachments/assets/dec9b301-b8e7-4dcc-947b-fc725a8b3d8a)
+
+![image](https://github.com/user-attachments/assets/8cc97267-b19a-431a-87fa-a1373272c60d)
+
+![image](https://github.com/user-attachments/assets/f8d41dc0-e4f1-403b-b119-b4f1a5e335cf)
+
+![image](https://github.com/user-attachments/assets/9017eaeb-3c96-40bd-8a6f-c0c76175a731)
+
+
 
 A Discord bot for managing media requests and subscriptions with Plex and Overseerr integration.
 
