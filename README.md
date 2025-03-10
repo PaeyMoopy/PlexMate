@@ -210,12 +210,10 @@ PlexMate provides several commands for interacting with your media server:
 ### Managing Subscriptions
 - `!list` - View all your current subscriptions
 - `!unsubscribe <title or ID>` - Remove a subscription
-  - Example: `!unsubscribe Stranger Things` or `!unsubscribe 5`
+  - Example: `!unsubscribe Stranger Things`
 
 ### Utilities
 - `!commands` - List all available commands and their usage
-- `!help` - Show help information about using the bot
-- `!ping` - Check if the bot is online and responsive
 
 ## User Mapping
 
