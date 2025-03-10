@@ -99,6 +99,8 @@ TMDB_API_KEY=
 ALLOWED_CHANNEL_ID=
 OVERSEERR_USER_MAP=({"1":"123456789"},{"2":"987654321"})
 # Format: {"overseerr_user_id":"discord_user_id"}
+OVERSEERR_FALLBACK_ID=  # Default ID to use for requests when no mapping exists (defaults to 1 if not set)
+# Format: {"overseerr_user_id":"discord_user_id"}
 ```
 ```bash
 # 6. Start the bot with PM2
@@ -287,6 +289,7 @@ OVERSEERR_API_KEY=      # Your Overseerr API key
 # Map Overseerr web users to Discord users for notifications
 # Format: {"overseerr_user_id":"discord_user_id"}
 OVERSEERR_USER_MAP=     # e.g., {"1":"123456789"}
+OVERSEERR_FALLBACK_ID=  # Default ID to use for requests when no mapping exists (defaults to 1 if not set)
 
 # TMDB Configuration
 TMDB_API_KEY=           # Your TMDB API key
@@ -328,6 +331,16 @@ Configure mappings in your `.env` file:
 ```env
 OVERSEERR_USER_MAP={"overseerr_id1":"discord_id1","overseerr_id2":"discord_id2"}
 ```
+
+### Fallback Overseerr ID
+
+When a Discord user doesn't have a mapping to an Overseerr account, the bot uses a fallback ID to make requests. You can configure this with:
+
+```env
+OVERSEERR_FALLBACK_ID=1  # Replace with your preferred default Overseerr user ID
+```
+
+If not specified, it defaults to user ID 1, which is typically the admin account in Overseerr. Set this to an account that has appropriate request permissions.
 
 ## Database
 
