@@ -80,7 +80,7 @@ git clone https://github.com/PaeyMoopy/PlexMate.git
 ```
 ```bash
 # 2. Navigate to project directory
-cd Plexcord
+cd PlexMate
 ```
 ```bash
 # 3. Install dependencies
