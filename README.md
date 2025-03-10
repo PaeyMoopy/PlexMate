@@ -2,7 +2,7 @@
 
 A Discord bot for managing media requests and subscriptions with Plex and Overseerr integration.
 
-Using mapping you can enable users in Overseerr to recieve notifications when their requests are available, even if they didnt use !request
+Using mapping you can enable users in Overseerr to recieve notifications when their requests are available, even if they didnt use "!request"!
 
 
 Some Screenshots:
