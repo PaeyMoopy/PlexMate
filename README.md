@@ -1,6 +1,11 @@
 # PlexMate
-Screenshots:
 
+A Discord bot for managing media requests and subscriptions with Plex and Overseerr integration.
+
+Using mapping you can enable users in Overseerr to recieve notifications when their requests are available, even if they didnt use !request
+
+
+Some Screenshots:
 
 ![image](https://github.com/user-attachments/assets/dec9b301-b8e7-4dcc-947b-fc725a8b3d8a)
 
@@ -9,10 +14,6 @@ Screenshots:
 ![image](https://github.com/user-attachments/assets/f8d41dc0-e4f1-403b-b119-b4f1a5e335cf)
 
 ![image](https://github.com/user-attachments/assets/9017eaeb-3c96-40bd-8a6f-c0c76175a731)
-
-
-
-A Discord bot for managing media requests and subscriptions with Plex and Overseerr integration.
 
 ## System Requirements
 
