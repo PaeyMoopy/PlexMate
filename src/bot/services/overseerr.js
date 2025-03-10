@@ -65,8 +65,12 @@ function getOverseerId(discordId) {
     }
   }
   
-  console.log('No mapping found, using fallback ID 6');
-  return 6;
+  // Get fallback ID from environment variable or default to 1
+  const fallbackId = process.env.OVERSEERR_FALLBACK_ID ? 
+    Number(process.env.OVERSEERR_FALLBACK_ID) : 1;
+  
+  console.log(`No mapping found, using fallback ID ${fallbackId}`);
+  return fallbackId;
 }
 
 // Get Discord ID from Overseerr ID (for notifications)

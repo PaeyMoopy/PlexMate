@@ -88,6 +88,20 @@ async function main() {
         console.error(chalk.red(`✗ OVERSEERR_USER_MAP has invalid JSON format. Please fix it.`));
         console.log(chalk.yellow(`Example: {"1":"265316362900078592","2":"123456789"}`));
       }
+      
+      // Check if OVERSEERR_FALLBACK_ID is set
+      if (!process.env.OVERSEERR_FALLBACK_ID) {
+        console.log(chalk.yellow('Optional: OVERSEERR_FALLBACK_ID is not set. Will default to 1.'));
+        console.log(chalk.yellow('Set this value if your Overseerr instance uses a different default user ID.'));
+      } else {
+        // Validate that it's a number
+        const fallbackId = Number(process.env.OVERSEERR_FALLBACK_ID);
+        if (isNaN(fallbackId) || fallbackId <= 0) {
+          console.error(chalk.red('✗ OVERSEERR_FALLBACK_ID must be a positive number.'));
+        } else {
+          console.log(chalk.green(`✓ OVERSEERR_FALLBACK_ID is set to ${fallbackId}.`));
+        }
+      }
     } else {
       validateSpinner.warn({ text: `Missing required variables: ${missingVars.join(', ')}` });
       console.log(chalk.yellow('Please edit your .env file to add the missing variables.'));

@@ -47,6 +47,7 @@ async function startBot() {
     console.log('WEBHOOK_PORT: ' + process.env.WEBHOOK_PORT);
     console.log('ALLOWED_CHANNEL_ID: ' + process.env.ALLOWED_CHANNEL_ID);
     console.log('OVERSEERR_USER_MAP: ' + process.env.OVERSEERR_USER_MAP);
+    console.log('OVERSEERR_FALLBACK_ID: ' + (process.env.OVERSEERR_FALLBACK_ID || '1 (default)'));
 
     // Validate required settings
     const requiredSettings = [
