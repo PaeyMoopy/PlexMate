@@ -77,30 +77,36 @@ npm -v  # Should show compatible npm version
 ```bash
 # 1. Clone the repository
 git clone https://github.com/PaeyMoopy/Plexcord.git
-
+```
+```bash
 # 2. Navigate to project directory
 cd Plexcord
-
+```
+```bash
 # 3. Install dependencies
 npm install
-
+```
+```bash
 # 4. Run setup script (this will create .env template)
 npm run setup
-
-# 5. Edit .env with your credentials:
-#    - DISCORD_TOKEN
-#    - OVERSEERR_URL
-#    - OVERSEERR_API_KEY
-#    - TMDB_API_KEY
-#    - ALLOWED_CHANNEL_ID
-#    - OVERSEERR_USER_MAP (e.g., {"1":"123456789"})
-
+```
+# 5. Create .env with your credentials:
+DISCORD_TOKEN=
+OVERSEERR_URL=
+OVERSEERR_API_KEY=
+TMDB_API_KEY=
+ALLOWED_CHANNEL_ID=
+OVERSEERR_USER_MAP=({"1":"123456789"},{"2":"987654321"})
+# Format: {"overseerr_user_id":"discord_user_id"}
+```bash
 # 6. Start the bot with PM2
 npm run start:pm2
-
+```
+```bash
 # To view logs
 npx pm2 logs
-
+```
+```bash
 # To stop the bot
 npx pm2 stop all
 ```
