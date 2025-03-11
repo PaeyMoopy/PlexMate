@@ -4,6 +4,7 @@ import { handleSubscribe } from './commands/subscribe.js';
 import { handleList } from './commands/list.js';
 import { handleUnsubscribe } from './commands/unsubscribe.js';
 import { handleCommands } from './commands/commands.js';
+import { handleMapping } from './commands/mapping.js';
 import { checkForUpdates } from './commands/update.js';
 import { setupWebhookServer } from './webhooks/plex.js';
 import { startRequestChecking } from './services/overseerrRequests.js';
@@ -47,6 +48,7 @@ async function startBot() {
     console.log('TMDB_API_KEY: ' + (process.env.TMDB_API_KEY ? '********' : 'undefined'));
     console.log('WEBHOOK_PORT: ' + process.env.WEBHOOK_PORT);
     console.log('ALLOWED_CHANNEL_ID: ' + process.env.ALLOWED_CHANNEL_ID);
+    console.log('ADMIN_CHANNEL_ID: ' + process.env.ADMIN_CHANNEL_ID);
     console.log('OVERSEERR_USER_MAP: ' + process.env.OVERSEERR_USER_MAP);
     console.log('OVERSEERR_FALLBACK_ID: ' + (process.env.OVERSEERR_FALLBACK_ID || '1 (default)'));
 
@@ -130,9 +132,15 @@ async function startBot() {
 
     client.on(Events.MessageCreate, async (message) => {
       if (message.author.bot) return;
-
-      // Check if the message is in the allowed channel
-      if (message.channel.id !== process.env.ALLOWED_CHANNEL_ID) return;
+      
+      // Check if message is in allowed channel or admin channel
+      const isAllowedChannel = message.channel.id === process.env.ALLOWED_CHANNEL_ID;
+      const isAdminChannel = message.channel.id === process.env.ADMIN_CHANNEL_ID;
+      
+      // Only proceed if message is in allowed channel or admin channel
+      if (!isAllowedChannel && !isAdminChannel) {
+        return;
+      }
 
       const args = message.content.split(' ');
       const command = args[0].toLowerCase();
@@ -152,7 +160,18 @@ async function startBot() {
             await handleUnsubscribe(message);
             break;
           case '!commands':
+          case '!help':
             await handleCommands(message);
+            break;
+          case '!mapping':
+            // Admin-only command - check if user is in admin channel
+            if (isAdminChannel) {
+              await handleMapping(message, args.slice(1));
+            } else {
+              await message.reply('This command is only available in the admin channel.');
+            }
+            break;
+          default:
             break;
         }
       } catch (error) {
