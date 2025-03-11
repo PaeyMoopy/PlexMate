@@ -48,7 +48,7 @@ async function startBot() {
     console.log('TMDB_API_KEY: ' + (process.env.TMDB_API_KEY ? '********' : 'undefined'));
     console.log('WEBHOOK_PORT: ' + process.env.WEBHOOK_PORT);
     console.log('ALLOWED_CHANNEL_ID: ' + process.env.ALLOWED_CHANNEL_ID);
-    console.log('ALLOWED_USER_IDS: ' + process.env.ALLOWED_USER_IDS);
+    console.log('ADMIN_CHANNEL_ID: ' + process.env.ADMIN_CHANNEL_ID);
     console.log('OVERSEERR_USER_MAP: ' + process.env.OVERSEERR_USER_MAP);
     console.log('OVERSEERR_FALLBACK_ID: ' + (process.env.OVERSEERR_FALLBACK_ID || '1 (default)'));
 
@@ -132,33 +132,14 @@ async function startBot() {
 
     client.on(Events.MessageCreate, async (message) => {
       if (message.author.bot) return;
-
-      // Parse the allowed users list from environment variable if it exists
-      const allowedUserIds = process.env.ALLOWED_USER_IDS ? 
-        process.env.ALLOWED_USER_IDS.split(',').map(id => id.trim()) : [];
       
-      // Debug logging to help diagnose DM issues
-      const isDM = message.channel.isDMBased();
-      if (isDM) {
-        console.log(`Received DM from user ID: ${message.author.id}`);
-        console.log(`Allowed user IDs: ${JSON.stringify(allowedUserIds)}`);
-        console.log(`Is user allowed: ${allowedUserIds.includes(message.author.id)}`);
-      }
-      
-      // Check if the message is in the allowed channel or is a DM from an allowed user
-      const isAllowedUser = allowedUserIds.includes(message.author.id);
+      // Check if message is in allowed channel or admin channel
       const isAllowedChannel = message.channel.id === process.env.ALLOWED_CHANNEL_ID;
+      const isAdminChannel = message.channel.id === process.env.ADMIN_CHANNEL_ID;
       
-      // Only proceed if the message is in the allowed channel OR if it's a DM from an allowed user
-      if (!isAllowedChannel && !(isDM && isAllowedUser)) {
-        if (isDM) {
-          console.log(`DM rejected: User ${message.author.id} is not in the allowed users list`);
-        }
+      // Only proceed if message is in allowed channel or admin channel
+      if (!isAllowedChannel && !isAdminChannel) {
         return;
-      }
-
-      if (isDM) {
-        console.log(`Processing DM command from allowed user ${message.author.id}`);
       }
 
       const args = message.content.split(' ');
@@ -183,11 +164,11 @@ async function startBot() {
             await handleCommands(message);
             break;
           case '!mapping':
-            // Admin-only command - check if user is in allowed users list
-            if (isAllowedUser) {
+            // Admin-only command - check if user is in admin channel
+            if (isAdminChannel) {
               await handleMapping(message, args.slice(1));
             } else {
-              await message.reply('This command is only available to bot administrators.');
+              await message.reply('This command is only available in the admin channel.');
             }
             break;
           default:

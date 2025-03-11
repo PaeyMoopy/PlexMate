@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 /**
  * Updates the Discord to Overseerr user mapping in the .env file
- * This is an admin-only command for users in the ALLOWED_USER_IDS list
+ * This is an admin command available only in the ADMIN_CHANNEL_ID channel
  */
 export async function handleMapping(message, args) {
   try {
