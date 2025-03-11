@@ -97,6 +97,7 @@ OVERSEERR_URL=
 OVERSEERR_API_KEY=
 TMDB_API_KEY=
 ALLOWED_CHANNEL_ID=
+ADMIN_CHANNEL_ID=
 OVERSEERR_USER_MAP=({"1":"123456789"},{"2":"987654321"})
 # Format: {"overseerr_user_id":"discord_user_id"}
 OVERSEERR_FALLBACK_ID=  # Default ID to use for requests when no mapping exists (defaults to 1 if not set)
@@ -261,6 +262,23 @@ The bot will automatically:
 - Initialize the database schema on first run
 - Check for updates on startup (silent, console-only)
 
+## Multi-Channel Setup
+
+PlexMate v1.0 introduces a multi-channel setup for better organization and security:
+
+### Regular Channel
+- Specified by `ALLOWED_CHANNEL_ID` in your `.env` file
+- All users can use standard commands like `!request`, `!subscribe`, etc.
+- Keeps media-related discussions in a dedicated channel
+
+### Admin Channel
+- Specified by `ADMIN_CHANNEL_ID` in your `.env` file
+- Admin-only commands like `!mapping` are only available in this channel
+- Uses Discord's built-in permission system to control access
+- Server admins can configure channel permissions to restrict who can use admin commands
+
+This design allows for better organization and security while simplifying bot configuration.
+
 ## Automatic Updates
 
 PlexMate includes a built-in update system that checks for new versions from your GitHub repository:
@@ -298,6 +316,7 @@ When using `npm run update:apply`:
 # Discord Bot Configuration
 DISCORD_TOKEN=           # Your Discord bot token
 ALLOWED_CHANNEL_ID=      # Channel ID where bot commands are allowed
+ADMIN_CHANNEL_ID=        # Channel ID where admin commands are allowed (mapping, etc.)
 
 # Overseerr Configuration
 OVERSEERR_URL=          # Your Overseerr instance URL
@@ -330,8 +349,10 @@ PlexMate provides several commands for interacting with your media server:
 
 ### Managing Subscriptions
 - `!list` - View all your current subscriptions
-- `!unsubscribe <title or ID>` - Remove a subscription
-  - Example: `!unsubscribe Stranger Things`
+- `!unsubscribe` - View and remove subscriptions with an interactive paginated menu
+  - Navigate through your subscriptions with ⬅️ and ➡️ reactions
+  - Select a subscription to unsubscribe using the number reactions (1️⃣-5️⃣)
+  - Each page displays up to 5 subscriptions for easy navigation
 
 ### Utilities
 - `!commands` - List all available commands and their usage
@@ -343,7 +364,19 @@ PlexMate supports bi-directional integration with Overseerr:
 2. Overseerr web users can receive Discord notifications for their requests
 3. Users without mappings will still work using a fallback Overseerr ID
 
-Configure mappings in your `.env` file:
+### Admin Commands for Mapping
+
+Authorized users can manage user mappings directly through Discord in the admin channel:
+
+```
+!mapping <discord_user_id> <overseerr_user_id>
+```
+
+Example: `!mapping 265316362900078592 1`
+
+This command updates the bot's configuration with the new mapping, enabling the user to receive notifications for their Overseerr requests.
+
+You can also configure mappings directly in your `.env` file:
 ```env
 OVERSEERR_USER_MAP={"overseerr_id1":"discord_id1","overseerr_id2":"discord_id2"}
 ```
