@@ -151,7 +151,7 @@ export async function handleSubscribe(message, query) {
               await confirmMsg.reactions.removeAll().catch(console.error);
               
               // Handle the case where user didn't react in time
-              if (reason !== 'selected') {
+              if (collected.size === 0) {
                 await message.reply('Subscription creation timed out. Please try again.');
               }
             });
