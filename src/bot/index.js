@@ -48,6 +48,7 @@ async function startBot() {
     console.log('TMDB_API_KEY: ' + (process.env.TMDB_API_KEY ? '********' : 'undefined'));
     console.log('WEBHOOK_PORT: ' + process.env.WEBHOOK_PORT);
     console.log('ALLOWED_CHANNEL_ID: ' + process.env.ALLOWED_CHANNEL_ID);
+    console.log('ALLOWED_USER_IDS: ' + process.env.ALLOWED_USER_IDS);
     console.log('OVERSEERR_USER_MAP: ' + process.env.OVERSEERR_USER_MAP);
     console.log('OVERSEERR_FALLBACK_ID: ' + (process.env.OVERSEERR_FALLBACK_ID || '1 (default)'));
 
@@ -136,13 +137,29 @@ async function startBot() {
       const allowedUserIds = process.env.ALLOWED_USER_IDS ? 
         process.env.ALLOWED_USER_IDS.split(',').map(id => id.trim()) : [];
       
-      // Check if the message is in the allowed channel or is a DM from an allowed user
+      // Debug logging to help diagnose DM issues
       const isDM = message.channel.isDMBased();
+      if (isDM) {
+        console.log(`Received DM from user ID: ${message.author.id}`);
+        console.log(`Allowed user IDs: ${JSON.stringify(allowedUserIds)}`);
+        console.log(`Is user allowed: ${allowedUserIds.includes(message.author.id)}`);
+      }
+      
+      // Check if the message is in the allowed channel or is a DM from an allowed user
       const isAllowedUser = allowedUserIds.includes(message.author.id);
       const isAllowedChannel = message.channel.id === process.env.ALLOWED_CHANNEL_ID;
       
       // Only proceed if the message is in the allowed channel OR if it's a DM from an allowed user
-      if (!isAllowedChannel && !(isDM && isAllowedUser)) return;
+      if (!isAllowedChannel && !(isDM && isAllowedUser)) {
+        if (isDM) {
+          console.log(`DM rejected: User ${message.author.id} is not in the allowed users list`);
+        }
+        return;
+      }
+
+      if (isDM) {
+        console.log(`Processing DM command from allowed user ${message.author.id}`);
+      }
 
       const args = message.content.split(' ');
       const command = args[0].toLowerCase();
