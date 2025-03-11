@@ -4,6 +4,7 @@ import { handleSubscribe } from './commands/subscribe.js';
 import { handleList } from './commands/list.js';
 import { handleUnsubscribe } from './commands/unsubscribe.js';
 import { handleCommands } from './commands/commands.js';
+import { handleMapping } from './commands/mapping.js';
 import { checkForUpdates } from './commands/update.js';
 import { setupWebhookServer } from './webhooks/plex.js';
 import { startRequestChecking } from './services/overseerrRequests.js';
@@ -161,7 +162,18 @@ async function startBot() {
             await handleUnsubscribe(message);
             break;
           case '!commands':
+          case '!help':
             await handleCommands(message);
+            break;
+          case '!mapping':
+            // Admin-only command - check if user is in allowed users list
+            if (isAllowedUser) {
+              await handleMapping(message, args.slice(1));
+            } else {
+              await message.reply('This command is only available to bot administrators.');
+            }
+            break;
+          default:
             break;
         }
       } catch (error) {
