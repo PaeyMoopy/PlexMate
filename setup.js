@@ -164,6 +164,11 @@ async function main() {
   console.log(`- Bot requires ${chalk.yellow('MESSAGE CONTENT INTENT')} to process commands`);
   console.log(`- Bot needs ${chalk.yellow('ADMINISTRATOR')} permission in your Discord server`);
   console.log('');
+  console.log(chalk.blue('Automatic Updates:'));
+  console.log(`- Check for updates: ${chalk.green('npm run update:check')}`);
+  console.log(`- Apply available updates: ${chalk.green('npm run update:apply')}`);
+  console.log(`- The bot will silently check for updates on startup (no user notification)`);
+  console.log('');
   console.log(chalk.gray('For more information, see the README.md file'));
 }
 

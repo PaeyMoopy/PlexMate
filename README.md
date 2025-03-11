@@ -259,22 +259,38 @@ If configured correctly, the webhook should trigger the notification service in 
 The bot will automatically:
 - Create a `data` directory for the SQLite database
 - Initialize the database schema on first run
-- Handle all database migrations automatically
-- Configure auto-start on system reboot (Linux only)
+- Check for updates on startup (silent, console-only)
 
-## Auto-Start on System Boot
+## Automatic Updates
 
-The setup script will help you configure the bot to start automatically when your system reboots (Linux only). It will:
+PlexMate includes a built-in update system that checks for new versions from your GitHub repository:
 
-1. Check if PM2 is installed and install it if needed
-2. Generate the startup command for your system
-3. Create a PM2 ecosystem configuration file
-4. Show you the final command to run as root
+### Features
+- Silently checks for updates when the bot starts
+- No notifications are sent to Discord users
+- All updates are handled via command line
 
-After setup, you need to:
-1. Run the generated startup command as root (shown during setup)
-2. Start the bot with `pm2 start ecosystem.config.cjs`
-3. Save the PM2 process list with `pm2 save`
+### Commands
+```bash
+# Check if an update is available
+npm run update:check
+
+# Apply available updates automatically
+npm run update:apply
+```
+
+### Requirements
+- The bot must be installed via Git
+- Your repository must use semantic versioning in package.json
+- The repository must have the correct GitHub owner and name configured in `src/bot/commands/update.js`
+
+### Update Process
+When using `npm run update:apply`:
+1. Checks for new versions via GitHub releases API
+2. Performs `git pull` to fetch the latest code
+3. Runs `npm install` to install any new dependencies
+4. Logs the results to the console
+5. Requires a restart of the bot to apply changes
 
 ## Environment Variables
 
