@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import dotenv from 'dotenv';
 
@@ -39,7 +39,7 @@ export async function handleMapping(message, args) {
     let envPath = null;
     for (const path of envPaths) {
       try {
-        if (require('fs').existsSync(path)) {
+        if (existsSync(path)) {
           envPath = path;
           break;
         }
