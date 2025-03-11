@@ -4,6 +4,7 @@ import { handleSubscribe } from './commands/subscribe.js';
 import { handleList } from './commands/list.js';
 import { handleUnsubscribe } from './commands/unsubscribe.js';
 import { handleCommands } from './commands/commands.js';
+import { checkForUpdates } from './commands/update.js';
 import { setupWebhookServer } from './webhooks/plex.js';
 import { startRequestChecking } from './services/overseerrRequests.js';
 import { config } from 'dotenv';
@@ -111,10 +112,20 @@ async function startBot() {
       }, 5000);
     });
 
-    client.once(Events.ClientReady, () => {
+    client.once(Events.ClientReady, async () => {
       console.log('PlexMate is ready!');
       setupWebhookServer();
       startRequestChecking(); // Start checking for Overseerr requests
+
+      // Check for updates on startup (silent, just logs to console)
+      const updateInfo = await checkForUpdates();
+      if (updateInfo.hasUpdate) {
+        console.log(`A new version of PlexMate is available! Current: ${updateInfo.currentVersion}, Latest: ${updateInfo.latestVersion}`);
+        console.log('Run npm run update:apply to update your bot automatically.');
+        console.log(`Changes in the new version:\n${updateInfo.changes}`);
+      } else {
+        console.log(`PlexMate is up to date (version ${updateInfo.currentVersion})`);
+      }
     });
 
     client.on(Events.MessageCreate, async (message) => {

@@ -1,12 +1,14 @@
 {
   "name": "plexmate",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "start": "node src/bot/index.js",
     "start:pm2": "pm2 start ecosystem.config.cjs",
-    "setup": "node setup.js"
+    "setup": "node setup.js",
+    "update:check": "node -e \"import('./src/bot/commands/update.js').then(({checkForUpdates}) => checkForUpdates().then(result => console.log(JSON.stringify(result, null, 2))))\"",
+    "update:apply": "node -e \"import('./src/bot/commands/update.js').then(({autoUpdate}) => autoUpdate(true).then(result => console.log(JSON.stringify(result, null, 2))))\""
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",
