@@ -131,8 +131,17 @@ async function startBot() {
     client.on(Events.MessageCreate, async (message) => {
       if (message.author.bot) return;
 
-      // Check if the message is in the allowed channel
-      if (message.channel.id !== process.env.ALLOWED_CHANNEL_ID) return;
+      // Parse the allowed users list from environment variable if it exists
+      const allowedUserIds = process.env.ALLOWED_USER_IDS ? 
+        process.env.ALLOWED_USER_IDS.split(',').map(id => id.trim()) : [];
+      
+      // Check if the message is in the allowed channel or is a DM from an allowed user
+      const isDM = message.channel.isDMBased();
+      const isAllowedUser = allowedUserIds.includes(message.author.id);
+      const isAllowedChannel = message.channel.id === process.env.ALLOWED_CHANNEL_ID;
+      
+      // Only proceed if the message is in the allowed channel OR if it's a DM from an allowed user
+      if (!isAllowedChannel && !(isDM && isAllowedUser)) return;
 
       const args = message.content.split(' ');
       const command = args[0].toLowerCase();
