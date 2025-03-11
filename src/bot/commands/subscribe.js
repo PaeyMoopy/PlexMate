@@ -78,10 +78,24 @@ export async function handleSubscribe(message, query) {
         const subscriptions = getSubscriptions(message.author.id.toString());
         const existingSubscription = subscriptions.find(sub => sub.media_id === selected.id.toString());
 
+        // Check for existing episode subscription first
+        if (existingSubscription && existingSubscription.episode_subscription === 1 && isEpisodeSubscription) {
+          await message.reply(`You are already subscribed to episodes of "${selected.title || selected.name}"!`);
+          collector.stop();
+          return;
+        }
+
         // For TV shows with "Release only" subscription, check if S1E1 already exists
         if (selected.media_type === 'tv' && !isEpisodeSubscription) {
           const { hasS1E1 } = await checkAvailability('tv', selected.id);
           
+          // If already subscribed to release notifications, notify user and stop
+          if (existingSubscription && existingSubscription.episode_subscription === 0 && !isEpisodeSubscription) {
+            await message.reply(`You are already subscribed to release notifications for "${selected.title || selected.name}"!`);
+            collector.stop();
+            return;
+          }
+
           if (hasS1E1) {
             // S1E1 already exists, so a "Release only" subscription would never trigger
             const confirmMsg = await message.reply(
