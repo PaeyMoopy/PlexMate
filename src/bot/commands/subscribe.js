@@ -85,29 +85,33 @@ export async function handleSubscribe(message, query) {
           if (hasS1E1) {
             // S1E1 already exists, so a "Release only" subscription would never trigger
             const confirmMsg = await message.reply(
-              `**Warning:** Season 1 Episode 1 of "${selected.name}" already exists in Plex!\n` +
+              `**Warning:** Season 1 of "${selected.name}" already exists in Plex!\n` +
               `A "Release only" subscription would never trigger notifications.\n` +
-              `Would you like to subscribe for ALL episodes instead? (React with 👍 or 👎)`
+              `Would you like to subscribe for ALL episodes instead?`
             );
             
+            // Add the thumbs up and down reactions
             await confirmMsg.react('👍');
             await confirmMsg.react('👎');
             
+            // Create a filter to only accept reactions from the original message author
+            const confirmFilter = (reaction, user) => {
+              return ['👍', '👎'].includes(reaction.emoji.name) && user.id === message.author.id;
+            };
+            
+            // Create reaction collector with the filter and timeout
             const confirmCollector = confirmMsg.createReactionCollector({ 
-              filter: (reaction, user) => {
-                return (reaction.emoji.name === '👍' || reaction.emoji.name === '👎') && 
-                       user.id === message.author.id;
-              }, 
+              filter: confirmFilter, 
               time: 30000,
               max: 1 
             });
             
-            confirmCollector.on('collect', async (reaction) => {
+            confirmCollector.on('collect', async (reaction, user) => {
               if (reaction.emoji.name === '👍') {
                 // User opted for episode subscription instead
                 isEpisodeSubscription = true;
                 await message.reply(`Subscribing to all episodes of "${selected.name}" instead!`);
-              } else {
+              } else if (reaction.emoji.name === '👎') {
                 // User confirmed they want release only despite the warning
                 await message.reply(`Creating "Release only" subscription for "${selected.name}" as requested, but no notifications will be sent for Season 1.`);
               }
@@ -125,14 +129,17 @@ export async function handleSubscribe(message, query) {
                 throw new Error('Failed to add subscription');
               }
               
-              confirmCollector.stop();
+              confirmCollector.stop('selected');
             });
             
-            confirmCollector.on('end', collected => {
-              if (collected.size === 0) {
-                message.reply('Subscription creation timed out. Please try again.');
+            confirmCollector.on('end', async (collected, reason) => {
+              // Clean up the reactions regardless of outcome
+              await confirmMsg.reactions.removeAll().catch(console.error);
+              
+              // Handle the case where user didn't react in time
+              if (reason !== 'selected') {
+                await message.reply('Subscription creation timed out. Please try again.');
               }
-              confirmMsg.reactions.removeAll().catch(console.error);
             });
             
             collector.stop();
