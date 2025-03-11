@@ -11,7 +11,7 @@ export async function handleSubscribe(message, query) {
 
   try {
     // Check for episode subscription flag
-    const isEpisodeSubscription = query.toLowerCase().includes('-e') || query.toLowerCase().includes('-episode');
+    let isEpisodeSubscription = query.toLowerCase().includes('-e') || query.toLowerCase().includes('-episode');
     let searchQuery = query.replace(/(-e|-episode)(\s|$)/i, '').trim();
 
     // Force TV search if episode subscription
