@@ -221,22 +221,15 @@ async function showDownloadStats(message) {
     // Send the downloads info
     let sentMessage;
     if (isInteraction) {
-      if (message.deferred) {
-        sentMessage = await message.editReply({ embeds: [downloadsEmbed] });
-      } else {
-        sentMessage = await message.reply({ embeds: [downloadsEmbed], ephemeral: false });
-      }
+      // For button interactions, we edit the deferred reply which is now non-ephemeral
+      sentMessage = await message.editReply({ embeds: [downloadsEmbed] });
       
-      // Auto-delete after 30 seconds if it's not ephemeral
-      if (!sentMessage.ephemeral) {
-        setTimeout(() => {
-          if (sentMessage.deletable) {
-            sentMessage.delete().catch(err => {
-              console.log('Could not delete downloads stats message:', err.message);
-            });
-          }
-        }, 30000);
-      }
+      // Set a timeout to delete the message after 30 seconds
+      setTimeout(() => {
+        message.deleteReply().catch(err => {
+          console.log('Could not delete downloads stats message:', err.message);
+        });
+      }, 30000);
     } else {
       sentMessage = await message.channel.send({ embeds: [downloadsEmbed] });
       
@@ -254,11 +247,7 @@ async function showDownloadStats(message) {
   } catch (error) {
     console.error('Error showing download stats:', error);
     if (message.isButton?.()) {
-      if (message.deferred) {
-        await message.editReply('An error occurred while fetching download stats.');
-      } else {
-        await message.reply({ content: 'An error occurred while fetching download stats.', ephemeral: true });
-      }
+      await message.editReply('An error occurred while fetching download stats.');
     } else {
       await message.reply('An error occurred while fetching download stats.');
     }
@@ -277,35 +266,19 @@ async function showHistoryStats(message) {
     
     // Send the history info
     let sentMessage;
-    if (isInteraction) {
-      if (message.deferred) {
-        sentMessage = await message.editReply({ embeds: [historyEmbed] });
-      } else {
-        sentMessage = await message.reply({ embeds: [historyEmbed], ephemeral: false });
-      }
-      
-      // Auto-delete after 30 seconds if it's not ephemeral
-      if (!sentMessage.ephemeral) {
-        setTimeout(() => {
-          if (sentMessage.deletable) {
-            sentMessage.delete().catch(err => {
-              console.log('Could not delete history stats message:', err.message);
-            });
-          }
-        }, 30000);
-      }
-    } else {
-      sentMessage = await message.channel.send({ embeds: [historyEmbed] });
-      
-      // Auto-delete after 30 seconds
-      setTimeout(() => {
-        if (sentMessage.deletable) {
-          sentMessage.delete().catch(err => {
-            console.log('Could not delete history stats message:', err.message);
-          });
-        }
-      }, 30000);
-    }
+   // For button interactions, we edit the deferred reply which is now non-ephemeral
+sentMessage = await message.editReply({ embeds: [historyEmbed] });
+
+// Set a timeout to delete the message after 30 seconds
+// For button interactions, we edit the deferred reply which is now non-ephemeral
+sentMessage = await message.editReply({ embeds: [historyEmbed] });
+
+// Set a timeout to delete the message after 30 seconds
+setTimeout(() => {
+  message.deleteReply().catch(err => {
+    console.log('Could not delete history stats message:', err.message);
+  });
+}, 30000);
     
     return sentMessage;
   } catch (error) {
@@ -862,7 +835,7 @@ async function createHistoryEmbed() {
     // Add recent views if available
     if (recentHistory && recentHistory.length > 0) {
       const fieldValue = recentHistory.map(item => {
-        const emoji = item.mediaType === 'movie' ? '🎬' : item.mediaType === 'episode' ? '📺' : '🎵';
+        const emoji = item.media_type === 'movie' ? '🎬' : item.media_type === 'episode' ? '📺' : '🎵';
         return `${emoji} ${item.title} - ${item.username} (${item.date})`;
       }).join('\n');
       
@@ -872,7 +845,7 @@ async function createHistoryEmbed() {
     // Add recent downloads if available
     if (recentDownloads && recentDownloads.length > 0) {
       const fieldValue = recentDownloads.map(item => {
-        const emoji = item.mediaType === 'movie' ? '🎬' : item.mediaType === 'episode' ? '📺' : '🎵';
+        const emoji = item.media_type === 'movie' ? '🎬' : item.media_type === 'episode' ? '📺' : '📁';
         return `${emoji} ${item.title} - ${item.quality} (${item.date})`;
       }).join('\n');
       
@@ -890,5 +863,62 @@ async function createHistoryEmbed() {
       .setTimestamp();
     
     return embed;
+  }
+}
+
+/**
+ * Show watch history stats
+ */
+async function showHistoryStats(message) {
+  try {
+    const isInteraction = message.isButton?.();
+    
+    // Create the history embed
+    const historyEmbed = await createHistoryEmbed();
+    
+    // Send the history info
+    let sentMessage;
+    if (isInteraction) {
+      if (message.deferred) {
+        sentMessage = await message.editReply({ embeds: [historyEmbed] });
+      } else {
+        sentMessage = await message.reply({ embeds: [historyEmbed], ephemeral: false });
+      }
+      
+      // Auto-delete after 30 seconds if it's not ephemeral
+      if (!sentMessage.ephemeral) {
+        setTimeout(() => {
+          if (sentMessage.deletable) {
+            sentMessage.delete().catch(err => {
+              console.log('Could not delete history stats message:', err.message);
+            });
+          }
+        }, 30000);
+      }
+    } else {
+      sentMessage = await message.channel.send({ embeds: [historyEmbed] });
+      
+      // Auto-delete after 30 seconds
+      setTimeout(() => {
+        if (sentMessage.deletable) {
+          sentMessage.delete().catch(err => {
+            console.log('Could not delete history stats message:', err.message);
+          });
+        }
+      }, 30000);
+    }
+    
+    return sentMessage;
+  } catch (error) {
+    console.error('Error showing history stats:', error);
+    if (message.isButton?.()) {
+      if (message.deferred) {
+        await message.editReply('An error occurred while fetching history stats.');
+      } else {
+        await message.reply({ content: 'An error occurred while fetching history stats.', ephemeral: true });
+      }
+    } else {
+      await message.reply('An error occurred while fetching history stats.');
+    }
   }
 }
