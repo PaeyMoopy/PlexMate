@@ -36,48 +36,75 @@ export async function handleStats(message, args = []) {
         return await message.reply('This command is only available in the admin channel.');
       }
     }
-
-    const subCommand = args[0]?.toLowerCase();
-
-    switch (subCommand) {
-      case 'streams':
-        await showStreamStats(message);
-        break;
-      case 'downloads':
-        await showDownloadStats(message);
-        break;
-      case 'history':
-        await showHistoryStats(message, args.slice(1));
-        break;
+    
+    // Handle button interactions
+    if (isInteraction) {
+      const buttonId = message.customId;
+      
+      if (buttonId === 'dashboard_refresh') {
+        try {
+          // Just refresh the current dashboard
+          return await refreshDashboard(message);
+        } catch (error) {
+          console.error('Error refreshing dashboard:', error);
+          return await message.reply({ content: 'Failed to refresh dashboard.', ephemeral: true });
+        }
+      } else if (buttonId === 'dashboard_streams') {
+        await message.deferReply();
+        return await showStreamStats(message);
+      } else if (buttonId === 'dashboard_downloads') {
+        await message.deferReply();
+        return await showDownloadStats(message);
+      } else if (buttonId === 'dashboard_history') {
+        await message.deferReply();
+        return await showHistoryStats(message);
+      } else if (buttonId === 'dashboard_scroll') {
+        // Just refresh and scroll to bottom
+        return await refreshDashboard(message, true);
+      }
+    }
+    
+    // If no args provided, show help
+    if (!args.length) {
+      return await message.reply(
+        '**Available Stats Commands:**\n' +
+        '`!stats dashboard` - Create an auto-updating dashboard\n' +
+        '`!stats start` - Start the dashboard\n' +
+        '`!stats stop` - Stop the dashboard\n' +
+        '`!stats streams` - Show current streams\n' +
+        '`!stats downloads` - Show current downloads\n' +
+        '`!stats history` - Show recent history'
+      );
+    }
+    
+    const subcommand = args[0].toLowerCase();
+    
+    // Handle subcommands
+    switch (subcommand) {
+      case 'start':
       case 'dashboard':
-        await createDashboard(message);
-        break;
+        return await createDashboard(message);
       case 'stop':
-        await stopDashboard(message);
-        break;
+        return await stopDashboard(message);
+      case 'streams':
+        return await showStreamStats(message);
+      case 'downloads':
+        return await showDownloadStats(message);
+      case 'history':
+        return await showHistoryStats(message);
       default:
-        await showHelp(message);
-        break;
+        return await message.reply('Unknown subcommand. Use `!stats` to see available commands.');
     }
   } catch (error) {
     console.error('Error handling stats command:', error);
-    
-    // Use the appropriate error handling based on message type
-    const isInteraction = message.isButton?.();
-    
-    if (isInteraction) {
-      if (message.deferred) {
-        await message.editReply('An error occurred while processing the stats command. Check the logs for details.')
-          .catch(console.error);
+    try {
+      if (isInteraction && message.deferred) {
+        await message.editReply('An error occurred while processing the stats command.');
       } else {
-        await message.reply({ 
-          content: 'An error occurred while processing the stats command. Check the logs for details.',
-          ephemeral: true 
-        }).catch(console.error);
+        await message.reply('An error occurred while processing the stats command.');
       }
-    } else {
-      await message.reply('An error occurred while processing the stats command. Check the logs for details.')
-        .catch(console.error);
+    } catch (err) {
+      console.error('Failed to send error response:', err);
     }
   }
 }
@@ -614,9 +641,15 @@ function createDashboardControls() {
     .setLabel('Show History')
     .setStyle(ButtonStyle.Secondary)
     .setEmoji('📚');
+    
+  const scrollButton = new ButtonBuilder()
+    .setCustomId('dashboard_scroll')
+    .setLabel('Scroll')
+    .setStyle(ButtonStyle.Success)
+    .setEmoji('↓');
   
   const row = new ActionRowBuilder().addComponents(
-    refreshButton, streamsButton, downloadsButton, historyButton
+    refreshButton, streamsButton, downloadsButton, historyButton, scrollButton
   );
   
   return [row];
@@ -718,5 +751,37 @@ export async function initStatsModule(client) {
     }
   } catch (error) {
     console.error('Error initializing stats module:', error);
+  }
+}
+
+/**
+ * Refresh the dashboard
+ */
+async function refreshDashboard(message, scroll = false) {
+  try {
+    const dashboardConfig = database.getDashboardConfig();
+    if (!dashboardConfig) {
+      return await message.reply('No active dashboard found.');
+    }
+    
+    const dashboardChannel = message.client.channels.cache.get(dashboardConfig.channel_id);
+    if (!dashboardChannel) {
+      return await message.reply('Dashboard channel not found.');
+    }
+    
+    const dashboardMessage = await dashboardChannel.messages.fetch(dashboardConfig.message_id);
+    if (!dashboardMessage) {
+      return await message.reply('Dashboard message not found.');
+    }
+    
+    const updatedEmbed = await createDashboardEmbed();
+    await dashboardMessage.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
+    
+    if (scroll) {
+      await dashboardChannel.send({ content: `Refreshed dashboard! <#${dashboardChannel.id}>` });
+    }
+  } catch (error) {
+    console.error('Error refreshing dashboard:', error);
+    await message.reply('Failed to refresh dashboard. Check the logs for details.');
   }
 }
