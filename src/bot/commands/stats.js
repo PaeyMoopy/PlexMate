@@ -687,6 +687,9 @@ function createDashboardControls() {
   return [row];
 }
 
+// Export for direct access in other modules
+export { createDashboardEmbed, createDashboardControls };
+
 /**
  * Helper function to get Sonarr queue formatted data
  */

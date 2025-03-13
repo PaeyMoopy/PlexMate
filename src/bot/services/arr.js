@@ -194,10 +194,7 @@ class ArrService {
   }
   
   /**
-   * Format queue items for display in Discord
-   * @param {Array} queue - Queue items from Sonarr or Radarr
-   * @param {string} type - 'sonarr' or 'radarr'
-   * @returns {Array<Object>} Formatted queue items
+   * Format queue items for display
    */
   formatQueueItems(queue, type) {
     if (!queue || !queue.records) {
@@ -222,14 +219,17 @@ class ArrService {
         }
         mediaType = 'TV Show';
       } else {
-        // For movies, try to get the title from multiple possible sources
+        // For movies, first try to get the title from movie metadata
         title = item.movie?.title;
         
-        // If no title but we have a filename, try to extract a better title
-        if (!title && item.downloadTitle) {
+        // If no title but we have a download title, try to extract a better title
+        if ((!title || title === 'Unknown Movie') && item.title) {
+          // Log the item for debugging
+          console.log(`Extracting title from: ${item.title}`);
+          
           // Extract a cleaner title from the download name
-          // Pattern: Movie.Name.YEAR.QUALITY.etc
-          const downloadTitle = item.downloadTitle;
+          // Common patterns: Movie.Name.YEAR.QUALITY.etc or Movie.Name.YEAR.etc
+          const downloadTitle = item.title;
           
           // Extract year if present (YYYY format)
           const yearMatch = downloadTitle.match(/\.(\d{4})\./);
@@ -249,6 +249,26 @@ class ArrService {
           cleanTitle = cleanTitle.replace(/\./g, ' ').trim();
           
           // Add year if found
+          title = cleanTitle + (year ? ` (${year})` : '');
+        }
+        
+        // If we still don't have a title, try using downloadTitle as a backup
+        if ((!title || title === 'Unknown Movie') && item.downloadTitle) {
+          // Similar process as above but using downloadTitle
+          const downloadTitle = item.downloadTitle;
+          
+          const yearMatch = downloadTitle.match(/\.(\d{4})\./);
+          const year = yearMatch ? yearMatch[1] : '';
+          
+          let cleanTitle = downloadTitle;
+          if (yearMatch) {
+            cleanTitle = downloadTitle.split(yearMatch[0])[0];
+          } else {
+            const parts = downloadTitle.split('.');
+            cleanTitle = parts.slice(0, Math.min(4, parts.length)).join('.');
+          }
+          
+          cleanTitle = cleanTitle.replace(/\./g, ' ').trim();
           title = cleanTitle + (year ? ` (${year})` : '');
         }
         

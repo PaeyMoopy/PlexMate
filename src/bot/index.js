@@ -5,10 +5,11 @@ import { handleList } from './commands/list.js';
 import { handleUnsubscribe } from './commands/unsubscribe.js';
 import { handleCommands } from './commands/commands.js';
 import { handleMapping } from './commands/mapping.js';
-import { handleStats, initStatsModule } from './commands/stats.js';
+import { handleStats, initStatsModule, createDashboardEmbed, createDashboardControls } from './commands/stats.js';
 import { checkForUpdates } from './commands/update.js';
 import { setupWebhookServer } from './webhooks/plex.js';
 import { startRequestChecking } from './services/overseerrRequests.js';
+import * as database from './services/database.js';
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
@@ -249,17 +250,67 @@ async function startBot() {
           
           switch (customId) {
             case 'dashboard_refresh':
-              await handleStats(interaction, ['dashboard']);
+              // Get dashboard config
+              const dashboardConfig = database.getDashboardConfig();
+              if (!dashboardConfig) {
+                return await interaction.editReply('No active dashboard found.');
+              }
+              
+              // Refresh the dashboard directly
+              const dashboardChannel = client.channels.cache.get(dashboardConfig.channel_id);
+              if (!dashboardChannel) {
+                return await interaction.editReply('Dashboard channel not found.');
+              }
+              
+              try {
+                const dashboardMessage = await dashboardChannel.messages.fetch(dashboardConfig.message_id);
+                const embed = await createDashboardEmbed();
+                await dashboardMessage.edit({ 
+                  embeds: [embed], 
+                  components: createDashboardControls() 
+                });
+                await interaction.editReply('Dashboard refreshed!');
+              } catch (err) {
+                console.error('Error refreshing dashboard:', err);
+                await interaction.editReply('Failed to refresh dashboard.');
+              }
               break;
+              
+            case 'dashboard_scroll':
+              // Get dashboard config
+              const config = database.getDashboardConfig();
+              if (!config) {
+                return await interaction.editReply('No active dashboard found.');
+              }
+              
+              // Send a new message to scroll the channel down
+              const channel = client.channels.cache.get(config.channel_id);
+              if (!channel) {
+                return await interaction.editReply('Dashboard channel not found.');
+              }
+              
+              try {
+                const refreshedMessage = await createDashboardEmbed();
+                await channel.send({ content: '📋 Dashboard refreshed! Scroll to see latest data.' });
+                await interaction.editReply('Sent a new message to scroll down!');
+              } catch (err) {
+                console.error('Error creating scroll message:', err);
+                await interaction.editReply('Failed to create scroll message.');
+              }
+              break;
+              
             case 'dashboard_streams':
               await handleStats(interaction, ['streams']);
               break;
+              
             case 'dashboard_downloads':
               await handleStats(interaction, ['downloads']);
               break;
+              
             case 'dashboard_history':
               await handleStats(interaction, ['history']);
               break;
+              
             default:
               await interaction.editReply('Unknown button action.');
               break;
