@@ -283,19 +283,47 @@ async function startBot() {
                 return await interaction.editReply('No active dashboard found.');
               }
               
-              // Send a new message to scroll the channel down
+              // Send a new dashboard to the bottom of the channel
               const channel = client.channels.cache.get(config.channel_id);
               if (!channel) {
                 return await interaction.editReply('Dashboard channel not found.');
               }
               
               try {
-                const refreshedMessage = await createDashboardEmbed();
-                await channel.send({ content: '📋 Dashboard refreshed! Scroll to see latest data.' });
-                await interaction.editReply('Sent a new message to scroll down!');
+                // Create a new dashboard embed
+                const embed = await createDashboardEmbed();
+                
+                // Send a new dashboard message
+                const newDashboardMessage = await channel.send({
+                  embeds: [embed],
+                  components: createDashboardControls()
+                });
+                
+                // Update the dashboard config with the new message ID
+                database.updateDashboardConfig({
+                  message_id: newDashboardMessage.id,
+                  channel_id: channel.id,
+                  user_id: interaction.user.id,
+                  interval: config.interval,
+                  last_updated: Date.now()
+                });
+                
+                // Try to delete the old dashboard message
+                try {
+                  const oldMessage = await channel.messages.fetch(config.message_id);
+                  if (oldMessage) {
+                    await oldMessage.delete().catch(err => {
+                      console.log('Could not delete old dashboard message:', err.message);
+                    });
+                  }
+                } catch (err) {
+                  console.log('Could not fetch old dashboard message:', err.message);
+                }
+                
+                await interaction.editReply('Dashboard moved to bottom of chat!');
               } catch (err) {
-                console.error('Error creating scroll message:', err);
-                await interaction.editReply('Failed to create scroll message.');
+                console.error('Error moving dashboard:', err);
+                await interaction.editReply('Failed to move dashboard to bottom.');
               }
               break;
               

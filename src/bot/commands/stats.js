@@ -502,16 +502,7 @@ async function createDashboard(message) {
       intervalId
     });
     
-    // Use appropriate reply method
-    if (isInteraction) {
-      if (message.deferred) {
-        await message.editReply(`Dashboard created! It will update every ${UPDATE_INTERVAL / 1000} seconds.`);
-      } else {
-        await message.reply({ content: `Dashboard created! It will update every ${UPDATE_INTERVAL / 1000} seconds.`, ephemeral: true });
-      }
-    } else {
-      await message.reply(`Dashboard created! It will update every ${UPDATE_INTERVAL / 1000} seconds.`);
-    }
+    return dashboardMsg;
   } catch (error) {
     console.error('Error creating dashboard:', error);
     
