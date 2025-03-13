@@ -212,11 +212,51 @@ class ArrService {
       let mediaType = '';
       
       if (type === 'sonarr') {
-        title = item.series?.title || 'Unknown Show';
+        // Try to get title from series object first
+        title = item.series?.title;
+        
+        // If no title but we have a download title, try to extract a better title
+        if ((!title || title === 'Unknown Show') && item.title) {
+          // Log the item for debugging
+          console.log(`Extracting TV show title from: ${item.title}`);
+          
+          // Extract TV show info from download name
+          // Common patterns for TV: Show.Name.S01E01.Episode.Name.etc
+          const downloadTitle = item.title;
+          
+          // Try to find season/episode pattern like S01E01
+          const episodeMatch = downloadTitle.match(/S\d+E\d+/i);
+          
+          // Get the part before the episode if found
+          let cleanTitle = downloadTitle;
+          if (episodeMatch) {
+            cleanTitle = downloadTitle.split(episodeMatch[0])[0];
+          } else {
+            // If no episode indicator found, just take first few parts
+            const parts = downloadTitle.split('.');
+            cleanTitle = parts.slice(0, Math.min(3, parts.length)).join('.');
+          }
+          
+          // Replace dots with spaces and clean up
+          cleanTitle = cleanTitle.replace(/\./g, ' ').trim();
+          
+          title = cleanTitle;
+        }
+        
+        // Add episode info if available
         if (item.episode) {
           title += ` - S${item.episode.seasonNumber.toString().padStart(2, '0')}E${item.episode.episodeNumber.toString().padStart(2, '0')}`;
           title += ` - ${item.episode.title}`;
+        } else if (item.title && item.title.match(/S\d+E\d+/i)) {
+          // Try to extract episode number from title
+          const match = item.title.match(/(S\d+E\d+)/i);
+          if (match) {
+            title += ` - ${match[1]}`;
+          }
         }
+        
+        // Make sure we have a title
+        title = title || 'Unknown Show';
         mediaType = 'TV Show';
       } else {
         // For movies, first try to get the title from movie metadata

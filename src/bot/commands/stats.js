@@ -175,22 +175,15 @@ async function showStreamStats(message) {
     // Send the streams info
     let sentMessage;
     if (isInteraction) {
-      if (message.deferred) {
-        sentMessage = await message.editReply({ embeds: [streamsEmbed] });
-      } else {
-        sentMessage = await message.reply({ embeds: [streamsEmbed], ephemeral: false });
-      }
+      // For button interactions, we edit the deferred reply which is now non-ephemeral
+      sentMessage = await message.editReply({ embeds: [streamsEmbed] });
       
-      // Auto-delete after 30 seconds if it's not ephemeral
-      if (!sentMessage.ephemeral) {
-        setTimeout(() => {
-          if (sentMessage.deletable) {
-            sentMessage.delete().catch(err => {
-              console.log('Could not delete streams stats message:', err.message);
-            });
-          }
-        }, 30000);
-      }
+      // Set a timeout to delete the message after 30 seconds
+      setTimeout(() => {
+        message.deleteReply().catch(err => {
+          console.log('Could not delete streams stats message:', err.message);
+        });
+      }, 30000);
     } else {
       sentMessage = await message.channel.send({ embeds: [streamsEmbed] });
       
@@ -208,11 +201,7 @@ async function showStreamStats(message) {
   } catch (error) {
     console.error('Error showing stream stats:', error);
     if (message.isButton?.()) {
-      if (message.deferred) {
-        await message.editReply('An error occurred while fetching stream stats.');
-      } else {
-        await message.reply({ content: 'An error occurred while fetching stream stats.', ephemeral: true });
-      }
+      await message.editReply('An error occurred while fetching stream stats.');
     } else {
       await message.reply('An error occurred while fetching stream stats.');
     }

@@ -246,7 +246,7 @@ async function startBot() {
       if (customId.startsWith('dashboard_')) {
         try {
           // Defer reply to avoid interaction timeout
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply();
           
           switch (customId) {
             case 'dashboard_refresh':
@@ -346,14 +346,26 @@ async function startBot() {
               break;
               
             case 'dashboard_streams':
+              // Send a non-ephemeral reply so it can be deleted automatically
+              await interaction.editReply('Loading streams...');
+              
+              // Call the streams handler with the interaction
               await handleStats(interaction, ['streams']);
               break;
               
             case 'dashboard_downloads':
+              // Send a non-ephemeral reply so it can be deleted automatically
+              await interaction.editReply('Loading downloads...');
+              
+              // Call the downloads handler with the interaction
               await handleStats(interaction, ['downloads']);
               break;
               
             case 'dashboard_history':
+              // Send a non-ephemeral reply so it can be deleted automatically
+              await interaction.editReply('Loading history...');
+              
+              // Call the history handler with the interaction
               await handleStats(interaction, ['history']);
               break;
               
