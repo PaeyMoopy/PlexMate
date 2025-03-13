@@ -5,11 +5,26 @@ import fetch from 'node-fetch';
  */
 class TautulliService {
   constructor() {
+    this.updateCredentials();
+  }
+
+  /**
+   * Update credentials from environment variables
+   * This ensures we always have the latest credentials
+   */
+  updateCredentials() {
     this.baseUrl = process.env.TAUTULLI_URL;
     this.apiKey = process.env.TAUTULLI_API_KEY;
     
+    // If URL has trailing slash, remove it
+    if (this.baseUrl && this.baseUrl.endsWith('/')) {
+      this.baseUrl = this.baseUrl.slice(0, -1);
+    }
+    
     if (!this.baseUrl || !this.apiKey) {
       console.warn('Tautulli URL or API key not configured. Statistics features will be limited.');
+    } else {
+      console.log(`Tautulli configured with URL: ${this.baseUrl}`);
     }
   }
 
@@ -20,6 +35,9 @@ class TautulliService {
    * @returns {Promise<Object>} The API response
    */
   async makeRequest(cmd, params = {}) {
+    // Always get the latest credentials
+    this.updateCredentials();
+    
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('Tautulli not configured');
     }
@@ -34,6 +52,8 @@ class TautulliService {
         url.searchParams.append(key, value);
       }
 
+      console.log(`Making Tautulli API request: ${cmd}`);
+      
       const response = await fetch(url.toString());
       if (!response.ok) {
         throw new Error(`Tautulli API error: ${response.status} ${response.statusText}`);

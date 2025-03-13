@@ -107,9 +107,12 @@ async function showHelp(message) {
  * Show current active streams stats
  */
 async function showStreamStats(message) {
-  await message.channel.sendTyping();
-  
   try {
+    // Check if this is an interaction and if we can send typing indicator
+    if (!message.deferred && message.channel && message.channel.sendTyping) {
+      await message.channel.sendTyping();
+    }
+    
     const activity = await tautulliService.getActivity();
     const streamData = tautulliService.formatStreamData(activity);
     
@@ -121,7 +124,22 @@ async function showStreamStats(message) {
         .setFooter({ text: 'Updated' })
         .setTimestamp();
       
-      return await message.reply({ embeds: [embed] });
+      // Handle different message types for interactions vs. regular messages
+      if (message.deferred) {
+        return await message.editReply({ embeds: [embed] });
+      } else if (message.replied) {
+        return await message.followUp({ embeds: [embed] });
+      } else {
+        try {
+          return await message.reply({ embeds: [embed] });
+        } catch (err) {
+          if (err.code === 'InteractionAlreadyReplied') {
+            return await message.followUp({ embeds: [embed] });
+          } else {
+            throw err;
+          }
+        }
+      }
     }
     
     // Create embed with stream information
@@ -147,10 +165,33 @@ async function showStreamStats(message) {
       });
     });
     
-    await message.reply({ embeds: [embed] });
+    // Handle different message types for interactions vs. regular messages
+    if (message.deferred) {
+      await message.editReply({ embeds: [embed] });
+    } else if (message.replied) {
+      await message.followUp({ embeds: [embed] });
+    } else {
+      try {
+        await message.reply({ embeds: [embed] });
+      } catch (err) {
+        if (err.code === 'InteractionAlreadyReplied') {
+          await message.followUp({ embeds: [embed] });
+        } else {
+          throw err;
+        }
+      }
+    }
   } catch (error) {
     console.error('Error getting stream stats:', error);
-    await message.reply('Failed to retrieve stream information. Make sure Tautulli is properly configured.');
+    try {
+      if (message.deferred) {
+        await message.editReply('Failed to retrieve stream information. Make sure Tautulli is properly configured.');
+      } else if (!message.replied) {
+        await message.reply('Failed to retrieve stream information. Make sure Tautulli is properly configured.');
+      }
+    } catch (err) {
+      console.error('Error handling stats command:', err);
+    }
   }
 }
 

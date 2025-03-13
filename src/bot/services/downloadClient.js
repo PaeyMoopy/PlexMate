@@ -20,35 +20,28 @@ class DownloadClientFactory {
     console.log(`Initializing download client: ${clientType || 'none'}`);
     
     // Set legacy variables from generic ones if needed
-    if (clientType === 'qbittorrent' && !process.env.QBITTORRENT_URL && process.env.DOWNLOAD_CLIENT_URL) {
-      console.log('Setting qBittorrent variables from generic download client variables');
+    if (clientType === 'qbittorrent' && process.env.DOWNLOAD_CLIENT_URL) {
+      console.log('Set QBITTORRENT variables from DOWNLOAD_CLIENT variables');
       process.env.QBITTORRENT_URL = process.env.DOWNLOAD_CLIENT_URL;
       process.env.QBITTORRENT_USERNAME = process.env.DOWNLOAD_CLIENT_USERNAME;
       process.env.QBITTORRENT_PASSWORD = process.env.DOWNLOAD_CLIENT_PASSWORD;
+      
+      // Force the qBittorrent service to update its credentials
+      qBittorrentService.updateCredentials();
     }
     
     switch (clientType) {
       case 'qbittorrent':
+        // Login to qBittorrent now to ensure it's working
+        qBittorrentService.login().catch(err => {
+          console.warn('Failed to login to qBittorrent:', err.message);
+        });
         return qBittorrentService;
       case 'sabnzbd':
         return sabnzbdService;
       default:
         console.warn(`Unknown or missing download client type: ${clientType}. Using none.`);
-        return {
-          // Return a dummy client that provides error messages
-          getDownloads: async () => {
-            return { error: 'No download client configured' };
-          },
-          formatDownloadData: () => {
-            return [];
-          },
-          formatBytes: (bytes) => {
-            if (bytes === 0) return '0 Bytes';
-            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(1024));
-            return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
-          }
-        };
+        return this.getDummyClient();
     }
   }
 
@@ -127,6 +120,40 @@ class DownloadClientFactory {
       console.error('Error getting download history:', error);
       return [];
     }
+  }
+
+  /**
+   * Returns a dummy client with basic functionality
+   * @returns {Object} Dummy client
+   */
+  getDummyClient() {
+    return {
+      // Return a dummy client that provides error messages
+      getDownloads: async () => {
+        return [];
+      },
+      getTorrents: async () => {
+        return [];
+      },
+      getQueue: async () => {
+        return [];
+      },
+      formatTorrentData: () => {
+        return [];
+      },
+      formatQueueData: () => {
+        return [];
+      },
+      formatHistoryData: () => {
+        return [];
+      },
+      formatBytes: (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
+      }
+    };
   }
 }
 
