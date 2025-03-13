@@ -646,7 +646,7 @@ function createDashboardControls() {
     .setCustomId('dashboard_scroll')
     .setLabel('Scroll')
     .setStyle(ButtonStyle.Success)
-    .setEmoji('↓');
+    .setEmoji('⏬');
   
   const row = new ActionRowBuilder().addComponents(
     refreshButton, streamsButton, downloadsButton, historyButton, scrollButton
