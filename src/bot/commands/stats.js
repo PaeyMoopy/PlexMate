@@ -15,10 +15,10 @@ const activeDashboards = new Map();
  * Shows the statistics dashboard in the admin channel
  */
 export async function handleStats(message, args = []) {
+  // Check if this is a message or an interaction
+  const isInteraction = message.isButton?.();
+  
   try {
-    // Check if this is a message or an interaction
-    const isInteraction = message.isButton?.();
-    
     // Determine the proper channel ID
     const channelId = isInteraction ? message.channel.id : message.channel.id;
     
@@ -41,26 +41,53 @@ export async function handleStats(message, args = []) {
     if (isInteraction) {
       const buttonId = message.customId;
       
-      if (buttonId === 'dashboard_refresh') {
-        try {
-          // Just refresh the current dashboard
-          return await refreshDashboard(message);
-        } catch (error) {
-          console.error('Error refreshing dashboard:', error);
-          return await message.reply({ content: 'Failed to refresh dashboard.', ephemeral: true });
-        }
-      } else if (buttonId === 'dashboard_streams') {
-        await message.deferReply();
-        return await showStreamStats(message);
-      } else if (buttonId === 'dashboard_downloads') {
-        await message.deferReply();
-        return await showDownloadStats(message);
-      } else if (buttonId === 'dashboard_history') {
-        await message.deferReply();
-        return await showHistoryStats(message);
-      } else if (buttonId === 'dashboard_scroll') {
-        // Just refresh and scroll to bottom
-        return await refreshDashboard(message, true);
+      // Handle different button actions
+      switch (buttonId) {
+        case 'dashboard_refresh':
+          try {
+            // Just refresh the current dashboard
+            return await refreshDashboard(message);
+          } catch (error) {
+            console.error('Error refreshing dashboard:', error);
+            return await message.reply({ content: 'Failed to refresh dashboard.', ephemeral: true });
+          }
+          
+        case 'dashboard_streams':
+          // Only defer if not already replied to
+          if (!message.deferred && !message.replied) {
+            await message.deferReply().catch(() => {
+              console.log('Could not defer reply - interaction may already be replied to');
+            });
+          }
+          return await showStreamStats(message);
+          
+        case 'dashboard_downloads':
+          // Only defer if not already replied to
+          if (!message.deferred && !message.replied) {
+            await message.deferReply().catch(() => {
+              console.log('Could not defer reply - interaction may already be replied to');
+            });
+          }
+          return await showDownloadStats(message);
+          
+        case 'dashboard_history':
+          // Only defer if not already replied to
+          if (!message.deferred && !message.replied) {
+            await message.deferReply().catch(() => {
+              console.log('Could not defer reply - interaction may already be replied to');
+            });
+          }
+          return await showHistoryStats(message);
+          
+        case 'dashboard_scroll':
+          // Just refresh and scroll to bottom
+          return await refreshDashboard(message, true);
+          
+        default:
+          return await message.reply({ 
+            content: 'Unknown button action.', 
+            ephemeral: true 
+          });
       }
     }
     
@@ -100,6 +127,11 @@ export async function handleStats(message, args = []) {
     try {
       if (isInteraction && message.deferred) {
         await message.editReply('An error occurred while processing the stats command.');
+      } else if (isInteraction) {
+        await message.reply({ 
+          content: 'An error occurred while processing the stats command.',
+          ephemeral: true 
+        }).catch(e => console.error('Could not send error response:', e));
       } else {
         await message.reply('An error occurred while processing the stats command.');
       }
