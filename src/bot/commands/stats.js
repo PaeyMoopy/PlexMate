@@ -301,96 +301,6 @@ async function showHistoryStats(message) {
 }
 
 /**
- * Create an auto-updating dashboard
- */
-async function createDashboard(message) {
-  try {
-    // Determine if this is a message or interaction
-    const isInteraction = message.isButton?.();
-    const channel = isInteraction ? message.channel : message.channel;
-    
-    // Check if a dashboard is already active
-    const existingConfig = database.getDashboardConfig();
-    if (existingConfig) {
-      const channelId = existingConfig.channel_id;
-      if (activeDashboards.has(channelId)) {
-        // Use appropriate reply method
-        if (isInteraction) {
-          if (message.deferred) {
-            return await message.editReply('A dashboard is already active. Use `!stats stop` to stop it first.');
-          } else {
-            return await message.reply({ content: 'A dashboard is already active. Use `!stats stop` to stop it first.', ephemeral: true });
-          }
-        } else {
-          return await message.reply('A dashboard is already active. Use `!stats stop` to stop it first.');
-        }
-      }
-    }
-    
-    // Send the initial message for the dashboard
-    const embed = await createDashboardEmbed();
-    const dashboardMsg = await channel.send({ embeds: [embed], components: createDashboardControls() });
-    
-    // Save dashboard configuration
-    database.updateDashboardConfig(dashboardMsg.id, channel.id, UPDATE_INTERVAL);
-    
-    // Set up interval to update the dashboard
-    const intervalId = setInterval(async () => {
-      try {
-        const updatedEmbed = await createDashboardEmbed();
-        await dashboardMsg.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
-      } catch (error) {
-        console.error('Error updating dashboard:', error);
-        clearInterval(intervalId);
-        activeDashboards.delete(channel.id);
-      }
-    }, UPDATE_INTERVAL);
-    
-    // Store active dashboard information
-    activeDashboards.set(channel.id, {
-      messageId: dashboardMsg.id,
-      intervalId
-    });
-    
-    return dashboardMsg;
-  } catch (error) {
-    console.error('Error creating dashboard:', error);
-    
-    // Use appropriate error handling based on message type
-    const isInteraction = message.isButton?.();
-    if (isInteraction) {
-      if (message.deferred) {
-        await message.editReply('Failed to create the dashboard. Check the logs for details.');
-      } else {
-        await message.reply({ content: 'Failed to create the dashboard. Check the logs for details.', ephemeral: true });
-      }
-    } else {
-      await message.reply('Failed to create the dashboard. Check the logs for details.');
-    }
-  }
-}
-
-/**
- * Stop an active dashboard
- */
-async function stopDashboard(message) {
-  try {
-    if (!activeDashboards.has(message.channel.id)) {
-      return await message.reply('No active dashboard found in this channel.');
-    }
-    
-    const dashboard = activeDashboards.get(message.channel.id);
-    clearInterval(dashboard.intervalId);
-    activeDashboards.delete(message.channel.id);
-    
-    await message.reply('Dashboard stopped successfully.');
-  } catch (error) {
-    console.error('Error stopping dashboard:', error);
-    await message.reply('Failed to stop the dashboard. Check the logs for details.');
-  }
-}
-
-/**
  * Create the dashboard embed with all stats
  */
 async function createDashboardEmbed() {
@@ -818,6 +728,8 @@ async function createHistoryEmbed() {
       .setFooter({ text: 'PlexMate Admin Dashboard' })
       .setTimestamp();
     
+    let hasContent = false;
+    
     // Add user stats if available
     if (watchStats && watchStats.length > 0) {
       const fieldValue = watchStats.map(stat => {
@@ -825,6 +737,7 @@ async function createHistoryEmbed() {
       }).join('\n');
       
       embed.addFields({ name: '👥 User Activity', value: fieldValue || 'No activity' });
+      hasContent = true;
     }
     
     // Add media type stats if available
@@ -835,6 +748,7 @@ async function createHistoryEmbed() {
       }).join('\n');
       
       embed.addFields({ name: '📊 Media Types', value: fieldValue || 'No activity' });
+      hasContent = true;
     }
     
     // Add recent views if available
@@ -845,6 +759,7 @@ async function createHistoryEmbed() {
       }).join('\n');
       
       embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
+      hasContent = true;
     }
     
     // Add recent downloads if available
@@ -855,6 +770,11 @@ async function createHistoryEmbed() {
       }).join('\n');
       
       embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue || 'No recent downloads' });
+      hasContent = true;
+    }
+    
+    if (!hasContent) {
+      embed.setDescription('No recent activity.');
     }
     
     return embed;
@@ -903,7 +823,13 @@ async function createDashboard(message) {
     const dashboardMsg = await channel.send({ embeds: [embed], components: createDashboardControls() });
     
     // Save dashboard configuration
-    database.updateDashboardConfig(dashboardMsg.id, channel.id, UPDATE_INTERVAL);
+    database.updateDashboardConfig({
+      message_id: dashboardMsg.id,
+      channel_id: channel.id,
+      user_id: isInteraction ? message.user.id : message.author.id,
+      interval: UPDATE_INTERVAL,
+      last_updated: Date.now()
+    });
     
     // Set up interval to update the dashboard
     const intervalId = setInterval(async () => {
@@ -938,5 +864,25 @@ async function createDashboard(message) {
     } else {
       await message.reply('Failed to create the dashboard. Check the logs for details.');
     }
+  }
+}
+
+/**
+ * Stop an active dashboard
+ */
+async function stopDashboard(message) {
+  try {
+    if (!activeDashboards.has(message.channel.id)) {
+      return await message.reply('No active dashboard found in this channel.');
+    }
+    
+    const dashboard = activeDashboards.get(message.channel.id);
+    clearInterval(dashboard.intervalId);
+    activeDashboards.delete(message.channel.id);
+    
+    await message.reply('Dashboard stopped successfully.');
+  } catch (error) {
+    console.error('Error stopping dashboard:', error);
+    await message.reply('Failed to stop the dashboard. Check the logs for details.');
   }
 }
