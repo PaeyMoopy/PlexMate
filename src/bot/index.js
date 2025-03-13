@@ -269,7 +269,14 @@ async function startBot() {
                   embeds: [embed], 
                   components: createDashboardControls() 
                 });
-                await interaction.editReply('Dashboard refreshed!');
+                
+                // Just acknowledge silently with a checkmark that will disappear
+                await interaction.editReply('✅');
+                setTimeout(() => {
+                  interaction.deleteReply().catch(err => {
+                    console.log('Could not delete refresh acknowledgment:', err.message);
+                  });
+                }, 2000);
               } catch (err) {
                 console.error('Error refreshing dashboard:', err);
                 await interaction.editReply('Failed to refresh dashboard.');
@@ -320,10 +327,21 @@ async function startBot() {
                   console.log('Could not fetch old dashboard message:', err.message);
                 }
                 
-                await interaction.editReply('Dashboard moved to bottom of chat!');
+                // Silent acknowledgment with auto-delete
+                await interaction.editReply('✅');
+                setTimeout(() => {
+                  interaction.deleteReply().catch(err => {
+                    console.log('Could not delete scroll acknowledgment:', err.message);
+                  });
+                }, 2000);
               } catch (err) {
                 console.error('Error moving dashboard:', err);
-                await interaction.editReply('Failed to move dashboard to bottom.');
+                await interaction.editReply('✅');
+                setTimeout(() => {
+                  interaction.deleteReply().catch(err => {
+                    console.log('Could not delete scroll acknowledgment:', err.message);
+                  });
+                }, 2000);
               }
               break;
               

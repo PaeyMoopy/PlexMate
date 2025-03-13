@@ -167,89 +167,54 @@ async function showHelp(message) {
  */
 async function showStreamStats(message) {
   try {
-    // Check if this is an interaction and if we can send typing indicator
-    if (!message.deferred && message.channel && message.channel.sendTyping) {
-      await message.channel.sendTyping();
-    }
+    const isInteraction = message.isButton?.();
     
-    const activity = await tautulliService.getActivity();
-    const streamData = tautulliService.formatStreamData(activity);
+    // Create the streams embed
+    const streamsEmbed = await createStreamsEmbed();
     
-    if (!streamData || streamData.length === 0) {
-      const embed = new EmbedBuilder()
-        .setTitle('📊 Current Streams')
-        .setColor(0x00BFFF)
-        .setDescription('No active streams at the moment.')
-        .setFooter({ text: 'Updated' })
-        .setTimestamp();
-      
-      // Handle different message types for interactions vs. regular messages
+    // Send the streams info
+    let sentMessage;
+    if (isInteraction) {
       if (message.deferred) {
-        return await message.editReply({ embeds: [embed] });
-      } else if (message.replied) {
-        return await message.followUp({ embeds: [embed] });
+        sentMessage = await message.editReply({ embeds: [streamsEmbed] });
       } else {
-        try {
-          return await message.reply({ embeds: [embed] });
-        } catch (err) {
-          if (err.code === 'InteractionAlreadyReplied') {
-            return await message.followUp({ embeds: [embed] });
-          } else {
-            throw err;
-          }
-        }
+        sentMessage = await message.reply({ embeds: [streamsEmbed], ephemeral: false });
       }
-    }
-    
-    // Create embed with stream information
-    const embed = new EmbedBuilder()
-      .setTitle(`📊 Current Streams (${streamData.length})`)
-      .setColor(0x00BFFF)
-      .setFooter({ text: 'Updated' })
-      .setTimestamp();
-    
-    // Add each stream as a field
-    streamData.forEach((stream, index) => {
-      const progressBar = createProgressBar(stream.progress);
-      const fieldValue = [
-        `${progressBar} (${stream.progress}%)`,
-        `${stream.quality} | ${stream.streamEmoji} ${stream.transcodeReason}`,
-        `Device: ${stream.device}`,
-        `Time Remaining: ${stream.timeRemaining}`
-      ].join('\n');
       
-      embed.addFields({
-        name: `${stream.mediaTypeEmoji} ${stream.title} (${stream.user})`,
-        value: fieldValue
-      });
-    });
-    
-    // Handle different message types for interactions vs. regular messages
-    if (message.deferred) {
-      await message.editReply({ embeds: [embed] });
-    } else if (message.replied) {
-      await message.followUp({ embeds: [embed] });
+      // Auto-delete after 30 seconds if it's not ephemeral
+      if (!sentMessage.ephemeral) {
+        setTimeout(() => {
+          if (sentMessage.deletable) {
+            sentMessage.delete().catch(err => {
+              console.log('Could not delete streams stats message:', err.message);
+            });
+          }
+        }, 30000);
+      }
     } else {
-      try {
-        await message.reply({ embeds: [embed] });
-      } catch (err) {
-        if (err.code === 'InteractionAlreadyReplied') {
-          await message.followUp({ embeds: [embed] });
-        } else {
-          throw err;
+      sentMessage = await message.channel.send({ embeds: [streamsEmbed] });
+      
+      // Auto-delete after 30 seconds
+      setTimeout(() => {
+        if (sentMessage.deletable) {
+          sentMessage.delete().catch(err => {
+            console.log('Could not delete streams stats message:', err.message);
+          });
         }
-      }
+      }, 30000);
     }
+    
+    return sentMessage;
   } catch (error) {
-    console.error('Error getting stream stats:', error);
-    try {
+    console.error('Error showing stream stats:', error);
+    if (message.isButton?.()) {
       if (message.deferred) {
-        await message.editReply('Failed to retrieve stream information. Make sure Tautulli is properly configured.');
-      } else if (!message.replied) {
-        await message.reply('Failed to retrieve stream information. Make sure Tautulli is properly configured.');
+        await message.editReply('An error occurred while fetching stream stats.');
+      } else {
+        await message.reply({ content: 'An error occurred while fetching stream stats.', ephemeral: true });
       }
-    } catch (err) {
-      console.error('Error handling stats command:', err);
+    } else {
+      await message.reply('An error occurred while fetching stream stats.');
     }
   }
 }
@@ -259,98 +224,54 @@ async function showStreamStats(message) {
  */
 async function showDownloadStats(message) {
   try {
-    // Check if this is an interaction and if we can send typing indicator
-    if (!message.deferred && message.channel && message.channel.sendTyping) {
-      await message.channel.sendTyping();
-    }
+    const isInteraction = message.isButton?.();
     
-    // Try to get data from multiple sources
-    const sonarrQueue = await getSonarrQueue();
-    const radarrQueue = await getRadarrQueue();
-    const downloadClientData = await getDownloadClientData();
+    // Create the downloads embed
+    const downloadsEmbed = await createDownloadsEmbed();
     
-    // Create the embed
-    const embed = new EmbedBuilder()
-      .setTitle('📊 Current Downloads')
-      .setColor(0x00BFFF)
-      .setFooter({ text: 'Updated' })
-      .setTimestamp();
-    
-    let hasContent = false;
-    
-    // Add Sonarr data if available
-    if (sonarrQueue && sonarrQueue.length > 0) {
-      const fieldValue = sonarrQueue.map(item => {
-        return `- ${item.title} (${item.progress}%) - ${item.quality}`;
-      }).join('\n');
-      
-      embed.addFields({ name: '📺 TV Shows', value: fieldValue || 'No active downloads' });
-      hasContent = true;
-    }
-    
-    // Add Radarr data if available
-    if (radarrQueue && radarrQueue.length > 0) {
-      const fieldValue = radarrQueue.map(item => {
-        return `- ${item.title} (${item.progress}%) - ${item.quality}`;
-      }).join('\n');
-      
-      embed.addFields({ name: '🎬 Movies', value: fieldValue || 'No active downloads' });
-      hasContent = true;
-    }
-    
-    // Add download client data if available
-    if (downloadClientData && downloadClientData.length > 0) {
-      const activeDownloads = downloadClientData
-        .filter(d => d.progress < 100 || (d.state && d.state.includes('download')))
-        .slice(0, 5); // Limit to top 5
-      
-      if (activeDownloads.length > 0) {
-        const clientType = downloadClientFactory.getClientType();
-        const fieldValue = activeDownloads.map(download => {
-          return `- ${download.name.substring(0, 30)}${download.name.length > 30 ? '...' : ''} (${download.progress}%)
-            ${download.progressBar} | ${download.downloadSpeed || 'N/A'} | ETA: ${download.eta || download.timeLeft || 'N/A'}`;
-        }).join('\n');
-        
-        embed.addFields({ 
-          name: `⬇️ Download Details (${clientType})`, 
-          value: '```' + fieldValue + '```' 
-        });
-        hasContent = true;
-      }
-    }
-    
-    if (!hasContent) {
-      embed.setDescription('No active downloads currently.');
-    }
-    
-    // Handle different message types
-    if (message.deferred) {
-      await message.editReply({ embeds: [embed] });
-    } else if (message.replied) {
-      // Message already replied, try to followUp
-      await message.followUp({ embeds: [embed] });
-    } else {
-      try {
-        await message.reply({ embeds: [embed] });
-      } catch (err) {
-        if (err.code === 'InteractionAlreadyReplied') {
-          // Try to followUp as a fallback
-          await message.followUp({ embeds: [embed] });
-        } else {
-          throw err;
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error getting download stats:', error);
-    try {
+    // Send the downloads info
+    let sentMessage;
+    if (isInteraction) {
       if (message.deferred) {
-        await message.editReply('Failed to retrieve download information. Check your service configurations.');
-      } else if (!message.replied) {
-        await message.reply('Failed to retrieve download information. Check your service configurations.');
+        sentMessage = await message.editReply({ embeds: [downloadsEmbed] });
+      } else {
+        sentMessage = await message.reply({ embeds: [downloadsEmbed], ephemeral: false });
       }
-    } catch (err) {
-      console.error('Error handling stats command:', err);
+      
+      // Auto-delete after 30 seconds if it's not ephemeral
+      if (!sentMessage.ephemeral) {
+        setTimeout(() => {
+          if (sentMessage.deletable) {
+            sentMessage.delete().catch(err => {
+              console.log('Could not delete downloads stats message:', err.message);
+            });
+          }
+        }, 30000);
+      }
+    } else {
+      sentMessage = await message.channel.send({ embeds: [downloadsEmbed] });
+      
+      // Auto-delete after 30 seconds
+      setTimeout(() => {
+        if (sentMessage.deletable) {
+          sentMessage.delete().catch(err => {
+            console.log('Could not delete downloads stats message:', err.message);
+          });
+        }
+      }, 30000);
+    }
+    
+    return sentMessage;
+  } catch (error) {
+    console.error('Error showing download stats:', error);
+    if (message.isButton?.()) {
+      if (message.deferred) {
+        await message.editReply('An error occurred while fetching download stats.');
+      } else {
+        await message.reply({ content: 'An error occurred while fetching download stats.', ephemeral: true });
+      }
+    } else {
+      await message.reply('An error occurred while fetching download stats.');
     }
   }
 }
@@ -358,94 +279,56 @@ async function showDownloadStats(message) {
 /**
  * Show watch history stats
  */
-async function showHistoryStats(message, args) {
+async function showHistoryStats(message) {
   try {
-    // Check if this is an interaction and if we can send typing indicator
-    if (!message.deferred && message.channel && message.channel.sendTyping) {
-      await message.channel.sendTyping();
-    }
+    const isInteraction = message.isButton?.();
     
-    const days = parseInt(args?.[0], 10) || 7;
-    const timeRange = `-${days} days`;
+    // Create the history embed
+    const historyEmbed = await createHistoryEmbed();
     
-    // Get stats from database
-    const watchStats = database.getWatchStatsByUser(timeRange);
-    const mediaTypeStats = database.getWatchStatsByMediaType(timeRange);
-    const recentHistory = database.getRecentWatchHistory(10);
-    const recentDownloads = database.getRecentDownloads(10);
-    
-    // Create the embed
-    const embed = new EmbedBuilder()
-      .setTitle(`📊 History Stats (Last ${days} Days)`)
-      .setColor(0x00BFFF)
-      .setFooter({ text: 'PlexMate Admin Dashboard' })
-      .setTimestamp();
-    
-    // Add user stats if available
-    if (watchStats && watchStats.length > 0) {
-      const fieldValue = watchStats.map(stat => {
-        return `${stat.username}: ${stat.count} views`;
-      }).join('\n');
-      
-      embed.addFields({ name: '👥 User Activity', value: fieldValue || 'No activity' });
-    }
-    
-    // Add media type stats if available
-    if (mediaTypeStats && mediaTypeStats.length > 0) {
-      const fieldValue = mediaTypeStats.map(stat => {
-        const emoji = stat.mediaType === 'movie' ? '🎬' : stat.mediaType === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${stat.mediaType}: ${stat.count} views`;
-      }).join('\n');
-      
-      embed.addFields({ name: '📊 Media Types', value: fieldValue || 'No activity' });
-    }
-    
-    // Add recent views if available
-    if (recentHistory && recentHistory.length > 0) {
-      const fieldValue = recentHistory.map(item => {
-        const emoji = item.mediaType === 'movie' ? '🎬' : item.mediaType === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${item.title} - ${item.username} (${item.date})`;
-      }).join('\n');
-      
-      embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
-    }
-    
-    // Add recent downloads if available
-    if (recentDownloads && recentDownloads.length > 0) {
-      const fieldValue = recentDownloads.map(item => {
-        const emoji = item.mediaType === 'movie' ? '🎬' : item.mediaType === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${item.title} - ${item.quality} (${item.date})`;
-      }).join('\n');
-      
-      embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue || 'No recent downloads' });
-    }
-    
-    // Handle different message types for interactions vs. regular messages
-    if (message.deferred) {
-      await message.editReply({ embeds: [embed] });
-    } else if (message.replied) {
-      await message.followUp({ embeds: [embed] });
-    } else {
-      try {
-        await message.reply({ embeds: [embed] });
-      } catch (err) {
-        if (err.code === 'InteractionAlreadyReplied') {
-          await message.followUp({ embeds: [embed] });
-        } else {
-          throw err;
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error getting history stats:', error);
-    try {
+    // Send the history info
+    let sentMessage;
+    if (isInteraction) {
       if (message.deferred) {
-        await message.editReply('Failed to retrieve history information.');
-      } else if (!message.replied) {
-        await message.reply('Failed to retrieve history information.');
+        sentMessage = await message.editReply({ embeds: [historyEmbed] });
+      } else {
+        sentMessage = await message.reply({ embeds: [historyEmbed], ephemeral: false });
       }
-    } catch (err) {
-      console.error('Error handling stats command:', err);
+      
+      // Auto-delete after 30 seconds if it's not ephemeral
+      if (!sentMessage.ephemeral) {
+        setTimeout(() => {
+          if (sentMessage.deletable) {
+            sentMessage.delete().catch(err => {
+              console.log('Could not delete history stats message:', err.message);
+            });
+          }
+        }, 30000);
+      }
+    } else {
+      sentMessage = await message.channel.send({ embeds: [historyEmbed] });
+      
+      // Auto-delete after 30 seconds
+      setTimeout(() => {
+        if (sentMessage.deletable) {
+          sentMessage.delete().catch(err => {
+            console.log('Could not delete history stats message:', err.message);
+          });
+        }
+      }, 30000);
+    }
+    
+    return sentMessage;
+  } catch (error) {
+    console.error('Error showing history stats:', error);
+    if (message.isButton?.()) {
+      if (message.deferred) {
+        await message.editReply('An error occurred while fetching history stats.');
+      } else {
+        await message.reply({ content: 'An error occurred while fetching history stats.', ephemeral: true });
+      }
+    } else {
+      await message.reply('An error occurred while fetching history stats.');
     }
   }
 }
@@ -809,5 +692,214 @@ async function refreshDashboard(message, scroll = false) {
   } catch (error) {
     console.error('Error refreshing dashboard:', error);
     await message.reply('Failed to refresh dashboard. Check the logs for details.');
+  }
+}
+
+/**
+ * Create the streams embed
+ */
+async function createStreamsEmbed() {
+  try {
+    // Check if this is an interaction and if we can send typing indicator
+    const activity = await tautulliService.getActivity();
+    const streamData = tautulliService.formatStreamData(activity);
+    
+    if (!streamData || streamData.length === 0) {
+      const embed = new EmbedBuilder()
+        .setTitle('📊 Current Streams')
+        .setColor(0x00BFFF)
+        .setDescription('No active streams at the moment.')
+        .setFooter({ text: 'Updated' })
+        .setTimestamp();
+      
+      return embed;
+    }
+    
+    // Create embed with stream information
+    const embed = new EmbedBuilder()
+      .setTitle(`📊 Current Streams (${streamData.length})`)
+      .setColor(0x00BFFF)
+      .setFooter({ text: 'Updated' })
+      .setTimestamp();
+    
+    // Add each stream as a field
+    streamData.forEach((stream, index) => {
+      const progressBar = createProgressBar(stream.progress);
+      const fieldValue = [
+        `${progressBar} (${stream.progress}%)`,
+        `${stream.quality} | ${stream.streamEmoji} ${stream.transcodeReason}`,
+        `Device: ${stream.device}`,
+        `Time Remaining: ${stream.timeRemaining}`
+      ].join('\n');
+      
+      embed.addFields({
+        name: `${stream.mediaTypeEmoji} ${stream.title} (${stream.user})`,
+        value: fieldValue
+      });
+    });
+    
+    return embed;
+  } catch (error) {
+    console.error('Error creating streams embed:', error);
+    const embed = new EmbedBuilder()
+      .setTitle('📊 Current Streams')
+      .setColor(0x00BFFF)
+      .setDescription('Failed to retrieve stream information. Check the logs for details.')
+      .setFooter({ text: 'Updated' })
+      .setTimestamp();
+    
+    return embed;
+  }
+}
+
+/**
+ * Create the downloads embed
+ */
+async function createDownloadsEmbed() {
+  try {
+    // Try to get data from multiple sources
+    const sonarrQueue = await getSonarrQueue();
+    const radarrQueue = await getRadarrQueue();
+    const downloadClientData = await getDownloadClientData();
+    
+    // Create the embed
+    const embed = new EmbedBuilder()
+      .setTitle('📊 Current Downloads')
+      .setColor(0x00BFFF)
+      .setFooter({ text: 'Updated' })
+      .setTimestamp();
+    
+    let hasContent = false;
+    
+    // Add Sonarr data if available
+    if (sonarrQueue && sonarrQueue.length > 0) {
+      const fieldValue = sonarrQueue.map(item => {
+        return `- ${item.title} (${item.progress}%) - ${item.quality}`;
+      }).join('\n');
+      
+      embed.addFields({ name: '📺 TV Shows', value: fieldValue || 'No active downloads' });
+      hasContent = true;
+    }
+    
+    // Add Radarr data if available
+    if (radarrQueue && radarrQueue.length > 0) {
+      const fieldValue = radarrQueue.map(item => {
+        return `- ${item.title} (${item.progress}%) - ${item.quality}`;
+      }).join('\n');
+      
+      embed.addFields({ name: '🎬 Movies', value: fieldValue || 'No active downloads' });
+      hasContent = true;
+    }
+    
+    // Add download client data if available
+    if (downloadClientData && downloadClientData.length > 0) {
+      const activeDownloads = downloadClientData
+        .filter(d => d.progress < 100 || (d.state && d.state.includes('download')))
+        .slice(0, 5); // Limit to top 5
+      
+      if (activeDownloads.length > 0) {
+        const clientType = downloadClientFactory.getClientType();
+        const fieldValue = activeDownloads.map(download => {
+          return `- ${download.name.substring(0, 30)}${download.name.length > 30 ? '...' : ''} (${download.progress}%)
+            ${download.progressBar} | ${download.downloadSpeed || 'N/A'} | ETA: ${download.eta || download.timeLeft || 'N/A'}`;
+        }).join('\n');
+        
+        embed.addFields({ 
+          name: `⬇️ Download Details (${clientType})`, 
+          value: '```' + fieldValue + '```' 
+        });
+        hasContent = true;
+      }
+    }
+    
+    if (!hasContent) {
+      embed.setDescription('No active downloads currently.');
+    }
+    
+    return embed;
+  } catch (error) {
+    console.error('Error creating downloads embed:', error);
+    const embed = new EmbedBuilder()
+      .setTitle('📊 Current Downloads')
+      .setColor(0x00BFFF)
+      .setDescription('Failed to retrieve download information. Check the logs for details.')
+      .setFooter({ text: 'Updated' })
+      .setTimestamp();
+    
+    return embed;
+  }
+}
+
+/**
+ * Create the history embed
+ */
+async function createHistoryEmbed() {
+  try {
+    const days = 7;
+    const timeRange = `-${days} days`;
+    
+    // Get stats from database
+    const watchStats = database.getWatchStatsByUser(timeRange);
+    const mediaTypeStats = database.getWatchStatsByMediaType(timeRange);
+    const recentHistory = database.getRecentWatchHistory(10);
+    const recentDownloads = database.getRecentDownloads(10);
+    
+    // Create the embed
+    const embed = new EmbedBuilder()
+      .setTitle(`📊 History Stats (Last ${days} Days)`)
+      .setColor(0x00BFFF)
+      .setFooter({ text: 'PlexMate Admin Dashboard' })
+      .setTimestamp();
+    
+    // Add user stats if available
+    if (watchStats && watchStats.length > 0) {
+      const fieldValue = watchStats.map(stat => {
+        return `${stat.username}: ${stat.count} views`;
+      }).join('\n');
+      
+      embed.addFields({ name: '👥 User Activity', value: fieldValue || 'No activity' });
+    }
+    
+    // Add media type stats if available
+    if (mediaTypeStats && mediaTypeStats.length > 0) {
+      const fieldValue = mediaTypeStats.map(stat => {
+        const emoji = stat.mediaType === 'movie' ? '🎬' : stat.mediaType === 'episode' ? '📺' : '🎵';
+        return `${emoji} ${stat.mediaType}: ${stat.count} views`;
+      }).join('\n');
+      
+      embed.addFields({ name: '📊 Media Types', value: fieldValue || 'No activity' });
+    }
+    
+    // Add recent views if available
+    if (recentHistory && recentHistory.length > 0) {
+      const fieldValue = recentHistory.map(item => {
+        const emoji = item.mediaType === 'movie' ? '🎬' : item.mediaType === 'episode' ? '📺' : '🎵';
+        return `${emoji} ${item.title} - ${item.username} (${item.date})`;
+      }).join('\n');
+      
+      embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
+    }
+    
+    // Add recent downloads if available
+    if (recentDownloads && recentDownloads.length > 0) {
+      const fieldValue = recentDownloads.map(item => {
+        const emoji = item.mediaType === 'movie' ? '🎬' : item.mediaType === 'episode' ? '📺' : '🎵';
+        return `${emoji} ${item.title} - ${item.quality} (${item.date})`;
+      }).join('\n');
+      
+      embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue || 'No recent downloads' });
+    }
+    
+    return embed;
+  } catch (error) {
+    console.error('Error creating history embed:', error);
+    const embed = new EmbedBuilder()
+      .setTitle('📊 History Stats')
+      .setColor(0x00BFFF)
+      .setDescription('Failed to retrieve history information. Check the logs for details.')
+      .setFooter({ text: 'PlexMate Admin Dashboard' })
+      .setTimestamp();
+    
+    return embed;
   }
 }
