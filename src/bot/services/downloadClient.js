@@ -76,13 +76,20 @@ class DownloadClientFactory {
     try {
       const clientType = this.getClientType();
       
-      if (clientType === 'qbittorrent') {
+      // Safety check for client existence
+      if (!this.client) {
+        console.warn('Download client not initialized');
+        return [];
+      }
+      
+      if (clientType === 'qbittorrent' && typeof this.client.getTorrents === 'function') {
         const torrents = await this.client.getTorrents('downloading');
         return this.client.formatTorrentData(torrents);
-      } else if (clientType === 'sabnzbd') {
+      } else if (clientType === 'sabnzbd' && typeof this.client.getQueue === 'function') {
         const queue = await this.client.getQueue();
         return this.client.formatQueueData(queue);
       } else {
+        console.warn(`Client type "${clientType}" not supported or missing required methods`);
         return [];
       }
     } catch (error) {
@@ -100,13 +107,20 @@ class DownloadClientFactory {
     try {
       const clientType = this.getClientType();
       
-      if (clientType === 'qbittorrent') {
+      // Safety check for client existence
+      if (!this.client) {
+        console.warn('Download client not initialized');
+        return [];
+      }
+      
+      if (clientType === 'qbittorrent' && typeof this.client.getTorrents === 'function') {
         const torrents = await this.client.getTorrents('completed');
-        return this.client.formatTorrentData(torrents).slice(0, limit);
-      } else if (clientType === 'sabnzbd') {
+        return this.client.formatTorrentData(torrents.slice(0, limit));
+      } else if (clientType === 'sabnzbd' && typeof this.client.getHistory === 'function') {
         const history = await this.client.getHistory(limit);
         return this.client.formatHistoryData(history);
       } else {
+        console.warn(`Client type "${clientType}" not supported or missing required methods for history`);
         return [];
       }
     } catch (error) {

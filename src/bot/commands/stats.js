@@ -158,9 +158,12 @@ async function showStreamStats(message) {
  * Show current download stats
  */
 async function showDownloadStats(message) {
-  await message.channel.sendTyping();
-  
   try {
+    // Check if this is an interaction and if we can send typing indicator
+    if (!message.deferred && message.channel && message.channel.sendTyping) {
+      await message.channel.sendTyping();
+    }
+    
     // Try to get data from multiple sources
     const sonarrQueue = await getSonarrQueue();
     const radarrQueue = await getRadarrQueue();
@@ -220,10 +223,35 @@ async function showDownloadStats(message) {
       embed.setDescription('No active downloads currently.');
     }
     
-    await message.reply({ embeds: [embed] });
+    // Handle different message types
+    if (message.deferred) {
+      await message.editReply({ embeds: [embed] });
+    } else if (message.replied) {
+      // Message already replied, try to followUp
+      await message.followUp({ embeds: [embed] });
+    } else {
+      try {
+        await message.reply({ embeds: [embed] });
+      } catch (err) {
+        if (err.code === 'InteractionAlreadyReplied') {
+          // Try to followUp as a fallback
+          await message.followUp({ embeds: [embed] });
+        } else {
+          throw err;
+        }
+      }
+    }
   } catch (error) {
     console.error('Error getting download stats:', error);
-    await message.reply('Failed to retrieve download information. Check your service configurations.');
+    try {
+      if (message.deferred) {
+        await message.editReply('Failed to retrieve download information. Check your service configurations.');
+      } else if (!message.replied) {
+        await message.reply('Failed to retrieve download information. Check your service configurations.');
+      }
+    } catch (err) {
+      console.error('Error handling stats command:', err);
+    }
   }
 }
 
@@ -231,12 +259,15 @@ async function showDownloadStats(message) {
  * Show watch history stats
  */
 async function showHistoryStats(message, args) {
-  await message.channel.sendTyping();
-  
-  const days = parseInt(args[0], 10) || 7;
-  const timeRange = `-${days} days`;
-  
   try {
+    // Check if this is an interaction and if we can send typing indicator
+    if (!message.deferred && message.channel && message.channel.sendTyping) {
+      await message.channel.sendTyping();
+    }
+    
+    const days = parseInt(args?.[0], 10) || 7;
+    const timeRange = `-${days} days`;
+    
     // Get stats from database
     const watchStats = database.getWatchStatsByUser(timeRange);
     const mediaTypeStats = database.getWatchStatsByMediaType(timeRange);
@@ -250,55 +281,72 @@ async function showHistoryStats(message, args) {
       .setFooter({ text: 'PlexMate Admin Dashboard' })
       .setTimestamp();
     
-    // Add watch stats by user
+    // Add user stats if available
     if (watchStats && watchStats.length > 0) {
-      const userStats = watchStats.map(stat => {
-        const hours = Math.floor(stat.total_duration / 3600) || 0;
-        const minutes = Math.floor((stat.total_duration % 3600) / 60) || 0;
-        return `${stat.user}: ${stat.count} plays (${hours}h ${minutes}m)`;
+      const fieldValue = watchStats.map(stat => {
+        return `${stat.username}: ${stat.count} views`;
       }).join('\n');
       
-      embed.addFields({ name: '👥 Watch Stats by User', value: userStats || 'No watch data available' });
-    } else {
-      embed.addFields({ name: '👥 Watch Stats by User', value: 'No watch data available' });
+      embed.addFields({ name: '👥 User Activity', value: fieldValue || 'No activity' });
     }
     
-    // Add watch stats by media type
+    // Add media type stats if available
     if (mediaTypeStats && mediaTypeStats.length > 0) {
-      const typeStats = mediaTypeStats.map(stat => {
-        const hours = Math.floor(stat.total_duration / 3600) || 0;
-        const minutes = Math.floor((stat.total_duration % 3600) / 60) || 0;
-        const emoji = stat.media_type === 'movie' ? '🎬' : stat.media_type === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${stat.media_type}: ${stat.count} plays (${hours}h ${minutes}m)`;
+      const fieldValue = mediaTypeStats.map(stat => {
+        const emoji = stat.mediaType === 'movie' ? '🎬' : stat.mediaType === 'episode' ? '📺' : '🎵';
+        return `${emoji} ${stat.mediaType}: ${stat.count} views`;
       }).join('\n');
       
-      embed.addFields({ name: '🎭 Watch Stats by Media Type', value: typeStats || 'No media type data available' });
+      embed.addFields({ name: '📊 Media Types', value: fieldValue || 'No activity' });
     }
     
-    // Add recent watch history
+    // Add recent views if available
     if (recentHistory && recentHistory.length > 0) {
-      const history = recentHistory.map(item => {
-        const emoji = item.media_type === 'movie' ? '🎬' : item.media_type === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${item.title} (${item.user})`;
+      const fieldValue = recentHistory.map(item => {
+        const emoji = item.mediaType === 'movie' ? '🎬' : item.mediaType === 'episode' ? '📺' : '🎵';
+        return `${emoji} ${item.title} - ${item.username} (${item.date})`;
       }).join('\n');
       
-      embed.addFields({ name: '🕒 Recent Watch History', value: history || 'No recent watch history' });
+      embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
     }
     
-    // Add recent download history
+    // Add recent downloads if available
     if (recentDownloads && recentDownloads.length > 0) {
-      const downloads = recentDownloads.map(item => {
-        const emoji = item.media_type === 'movie' ? '🎬' : item.media_type === 'episode' ? '📺' : '📁';
-        return `${emoji} ${item.title} (${item.event_type})`;
+      const fieldValue = recentDownloads.map(item => {
+        const emoji = item.mediaType === 'movie' ? '🎬' : item.mediaType === 'episode' ? '📺' : '🎵';
+        return `${emoji} ${item.title} - ${item.quality} (${item.date})`;
       }).join('\n');
       
-      embed.addFields({ name: '⬇️ Recent Downloads', value: downloads || 'No recent downloads' });
+      embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue || 'No recent downloads' });
     }
     
-    await message.reply({ embeds: [embed] });
+    // Handle different message types for interactions vs. regular messages
+    if (message.deferred) {
+      await message.editReply({ embeds: [embed] });
+    } else if (message.replied) {
+      await message.followUp({ embeds: [embed] });
+    } else {
+      try {
+        await message.reply({ embeds: [embed] });
+      } catch (err) {
+        if (err.code === 'InteractionAlreadyReplied') {
+          await message.followUp({ embeds: [embed] });
+        } else {
+          throw err;
+        }
+      }
+    }
   } catch (error) {
     console.error('Error getting history stats:', error);
-    await message.reply('Failed to retrieve history statistics from the database.');
+    try {
+      if (message.deferred) {
+        await message.editReply('Failed to retrieve history information.');
+      } else if (!message.replied) {
+        await message.reply('Failed to retrieve history information.');
+      }
+    } catch (err) {
+      console.error('Error handling stats command:', err);
+    }
   }
 }
 
