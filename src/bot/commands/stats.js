@@ -266,29 +266,34 @@ async function showHistoryStats(message) {
     
     // Send the history info
     let sentMessage;
-   // For button interactions, we edit the deferred reply which is now non-ephemeral
-sentMessage = await message.editReply({ embeds: [historyEmbed] });
-
-// Set a timeout to delete the message after 30 seconds
-// For button interactions, we edit the deferred reply which is now non-ephemeral
-sentMessage = await message.editReply({ embeds: [historyEmbed] });
-
-// Set a timeout to delete the message after 30 seconds
-setTimeout(() => {
-  message.deleteReply().catch(err => {
-    console.log('Could not delete history stats message:', err.message);
-  });
-}, 30000);
+    if (isInteraction) {
+      // For button interactions, we edit the deferred reply which is now non-ephemeral
+      sentMessage = await message.editReply({ embeds: [historyEmbed] });
+      
+      // Set a timeout to delete the message after 30 seconds
+      setTimeout(() => {
+        message.deleteReply().catch(err => {
+          console.log('Could not delete history stats message:', err.message);
+        });
+      }, 30000);
+    } else {
+      sentMessage = await message.channel.send({ embeds: [historyEmbed] });
+      
+      // Auto-delete after 30 seconds
+      setTimeout(() => {
+        if (sentMessage.deletable) {
+          sentMessage.delete().catch(err => {
+            console.log('Could not delete history stats message:', err.message);
+          });
+        }
+      }, 30000);
+    }
     
     return sentMessage;
   } catch (error) {
     console.error('Error showing history stats:', error);
     if (message.isButton?.()) {
-      if (message.deferred) {
-        await message.editReply('An error occurred while fetching history stats.');
-      } else {
-        await message.reply({ content: 'An error occurred while fetching history stats.', ephemeral: true });
-      }
+      await message.editReply('An error occurred while fetching history stats.');
     } else {
       await message.reply('An error occurred while fetching history stats.');
     }
@@ -867,58 +872,71 @@ async function createHistoryEmbed() {
 }
 
 /**
- * Show watch history stats
+ * Create an auto-updating dashboard
  */
-async function showHistoryStats(message) {
+async function createDashboard(message) {
   try {
+    // Determine if this is a message or interaction
     const isInteraction = message.isButton?.();
+    const channel = isInteraction ? message.channel : message.channel;
     
-    // Create the history embed
-    const historyEmbed = await createHistoryEmbed();
-    
-    // Send the history info
-    let sentMessage;
-    if (isInteraction) {
-      if (message.deferred) {
-        sentMessage = await message.editReply({ embeds: [historyEmbed] });
-      } else {
-        sentMessage = await message.reply({ embeds: [historyEmbed], ephemeral: false });
-      }
-      
-      // Auto-delete after 30 seconds if it's not ephemeral
-      if (!sentMessage.ephemeral) {
-        setTimeout(() => {
-          if (sentMessage.deletable) {
-            sentMessage.delete().catch(err => {
-              console.log('Could not delete history stats message:', err.message);
-            });
+    // Check if a dashboard is already active
+    const existingConfig = database.getDashboardConfig();
+    if (existingConfig) {
+      const channelId = existingConfig.channel_id;
+      if (activeDashboards.has(channelId)) {
+        // Use appropriate reply method
+        if (isInteraction) {
+          if (message.deferred) {
+            return await message.editReply('A dashboard is already active. Use `!stats stop` to stop it first.');
+          } else {
+            return await message.reply({ content: 'A dashboard is already active. Use `!stats stop` to stop it first.', ephemeral: true });
           }
-        }, 30000);
-      }
-    } else {
-      sentMessage = await message.channel.send({ embeds: [historyEmbed] });
-      
-      // Auto-delete after 30 seconds
-      setTimeout(() => {
-        if (sentMessage.deletable) {
-          sentMessage.delete().catch(err => {
-            console.log('Could not delete history stats message:', err.message);
-          });
+        } else {
+          return await message.reply('A dashboard is already active. Use `!stats stop` to stop it first.');
         }
-      }, 30000);
+      }
     }
     
-    return sentMessage;
+    // Send the initial message for the dashboard
+    const embed = await createDashboardEmbed();
+    const dashboardMsg = await channel.send({ embeds: [embed], components: createDashboardControls() });
+    
+    // Save dashboard configuration
+    database.updateDashboardConfig(dashboardMsg.id, channel.id, UPDATE_INTERVAL);
+    
+    // Set up interval to update the dashboard
+    const intervalId = setInterval(async () => {
+      try {
+        const updatedEmbed = await createDashboardEmbed();
+        await dashboardMsg.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
+      } catch (error) {
+        console.error('Error updating dashboard:', error);
+        clearInterval(intervalId);
+        activeDashboards.delete(channel.id);
+      }
+    }, UPDATE_INTERVAL);
+    
+    // Store active dashboard information
+    activeDashboards.set(channel.id, {
+      messageId: dashboardMsg.id,
+      intervalId
+    });
+    
+    return dashboardMsg;
   } catch (error) {
-    console.error('Error showing history stats:', error);
-    if (message.isButton?.()) {
+    console.error('Error creating dashboard:', error);
+    
+    // Use appropriate error handling based on message type
+    const isInteraction = message.isButton?.();
+    if (isInteraction) {
       if (message.deferred) {
-        await message.editReply('An error occurred while fetching history stats.');
+        await message.editReply('Failed to create the dashboard. Check the logs for details.');
       } else {
-        await message.reply({ content: 'An error occurred while fetching history stats.', ephemeral: true });
+        await message.reply({ content: 'Failed to create the dashboard. Check the logs for details.', ephemeral: true });
       }
     } else {
-      await message.reply('An error occurred while fetching history stats.');
+      await message.reply('Failed to create the dashboard. Check the logs for details.');
     }
   }
 }
