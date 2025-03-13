@@ -16,9 +16,25 @@ const activeDashboards = new Map();
  */
 export async function handleStats(message, args = []) {
   try {
+    // Check if this is a message or an interaction
+    const isInteraction = message.isButton?.();
+    
+    // Determine the proper channel ID
+    const channelId = isInteraction ? message.channel.id : message.channel.id;
+    
     // Verify this is being run in the admin channel
-    if (message.channel.id !== process.env.ADMIN_CHANNEL_ID) {
-      return await message.reply('This command is only available in the admin channel.');
+    if (channelId !== process.env.ADMIN_CHANNEL_ID) {
+      // Use the appropriate reply method
+      if (isInteraction) {
+        // For interactions that have been deferred, we use editReply
+        if (message.deferred) {
+          return await message.editReply('This command is only available in the admin channel.');
+        } else {
+          return await message.reply({ content: 'This command is only available in the admin channel.', ephemeral: true });
+        }
+      } else {
+        return await message.reply('This command is only available in the admin channel.');
+      }
     }
 
     const subCommand = args[0]?.toLowerCase();
@@ -45,7 +61,24 @@ export async function handleStats(message, args = []) {
     }
   } catch (error) {
     console.error('Error handling stats command:', error);
-    await message.reply('An error occurred while processing the stats command. Check the logs for details.');
+    
+    // Use the appropriate error handling based on message type
+    const isInteraction = message.isButton?.();
+    
+    if (isInteraction) {
+      if (message.deferred) {
+        await message.editReply('An error occurred while processing the stats command. Check the logs for details.')
+          .catch(console.error);
+      } else {
+        await message.reply({ 
+          content: 'An error occurred while processing the stats command. Check the logs for details.',
+          ephemeral: true 
+        }).catch(console.error);
+      }
+    } else {
+      await message.reply('An error occurred while processing the stats command. Check the logs for details.')
+        .catch(console.error);
+    }
   }
 }
 
@@ -274,21 +307,34 @@ async function showHistoryStats(message, args) {
  */
 async function createDashboard(message) {
   try {
+    // Determine if this is a message or interaction
+    const isInteraction = message.isButton?.();
+    const channel = isInteraction ? message.channel : message.channel;
+    
     // Check if a dashboard is already active
     const existingConfig = database.getDashboardConfig();
     if (existingConfig) {
       const channelId = existingConfig.channel_id;
       if (activeDashboards.has(channelId)) {
-        return await message.reply('A dashboard is already active. Use `!stats stop` to stop it first.');
+        // Use appropriate reply method
+        if (isInteraction) {
+          if (message.deferred) {
+            return await message.editReply('A dashboard is already active. Use `!stats stop` to stop it first.');
+          } else {
+            return await message.reply({ content: 'A dashboard is already active. Use `!stats stop` to stop it first.', ephemeral: true });
+          }
+        } else {
+          return await message.reply('A dashboard is already active. Use `!stats stop` to stop it first.');
+        }
       }
     }
     
     // Send the initial message for the dashboard
     const embed = await createDashboardEmbed();
-    const dashboardMsg = await message.channel.send({ embeds: [embed], components: createDashboardControls() });
+    const dashboardMsg = await channel.send({ embeds: [embed], components: createDashboardControls() });
     
     // Save dashboard configuration
-    database.updateDashboardConfig(dashboardMsg.id, message.channel.id, UPDATE_INTERVAL);
+    database.updateDashboardConfig(dashboardMsg.id, channel.id, UPDATE_INTERVAL);
     
     // Set up interval to update the dashboard
     const intervalId = setInterval(async () => {
@@ -298,20 +344,40 @@ async function createDashboard(message) {
       } catch (error) {
         console.error('Error updating dashboard:', error);
         clearInterval(intervalId);
-        activeDashboards.delete(message.channel.id);
+        activeDashboards.delete(channel.id);
       }
     }, UPDATE_INTERVAL);
     
     // Store active dashboard information
-    activeDashboards.set(message.channel.id, {
+    activeDashboards.set(channel.id, {
       messageId: dashboardMsg.id,
       intervalId
     });
     
-    await message.reply(`Dashboard created! It will update every ${UPDATE_INTERVAL / 1000} seconds.`);
+    // Use appropriate reply method
+    if (isInteraction) {
+      if (message.deferred) {
+        await message.editReply(`Dashboard created! It will update every ${UPDATE_INTERVAL / 1000} seconds.`);
+      } else {
+        await message.reply({ content: `Dashboard created! It will update every ${UPDATE_INTERVAL / 1000} seconds.`, ephemeral: true });
+      }
+    } else {
+      await message.reply(`Dashboard created! It will update every ${UPDATE_INTERVAL / 1000} seconds.`);
+    }
   } catch (error) {
     console.error('Error creating dashboard:', error);
-    await message.reply('Failed to create the dashboard. Check the logs for details.');
+    
+    // Use appropriate error handling based on message type
+    const isInteraction = message.isButton?.();
+    if (isInteraction) {
+      if (message.deferred) {
+        await message.editReply('Failed to create the dashboard. Check the logs for details.');
+      } else {
+        await message.reply({ content: 'Failed to create the dashboard. Check the logs for details.', ephemeral: true });
+      }
+    } else {
+      await message.reply('Failed to create the dashboard. Check the logs for details.');
+    }
   }
 }
 

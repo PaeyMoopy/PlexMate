@@ -224,19 +224,15 @@ async function startBot() {
           switch (customId) {
             case 'dashboard_refresh':
               await handleStats(interaction, ['dashboard']);
-              await interaction.editReply('Dashboard refreshed!');
               break;
             case 'dashboard_streams':
               await handleStats(interaction, ['streams']);
-              await interaction.editReply('Streams view displayed.');
               break;
             case 'dashboard_downloads':
               await handleStats(interaction, ['downloads']);
-              await interaction.editReply('Downloads view displayed.');
               break;
             case 'dashboard_history':
               await handleStats(interaction, ['history']);
-              await interaction.editReply('History view displayed.');
               break;
             default:
               await interaction.editReply('Unknown button action.');

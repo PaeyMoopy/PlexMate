@@ -46,11 +46,15 @@ class ArrService {
         throw new Error(`${type} not configured`);
       }
       
+      // Normalize the base URL to remove trailing slashes
+      const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      console.log(`Using normalized ${type} URL: ${normalizedBaseUrl}`);
+      
       // Build URL with more robust error handling
       let url;
       try {
         // Try standard API path format first
-        url = new URL(`${baseUrl}/api/${apiVersion}/${endpoint}`);
+        url = new URL(`${normalizedBaseUrl}/api/${apiVersion}/${endpoint}`);
       } catch (e) {
         console.error(`Invalid ${type} URL:`, baseUrl);
         throw new Error(`Invalid ${type} URL: ${baseUrl}`);
