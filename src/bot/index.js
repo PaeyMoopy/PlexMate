@@ -68,6 +68,32 @@ async function startBot() {
     console.log('QBITTORRENT_PASSWORD: ' + (process.env.QBITTORRENT_PASSWORD ? '********' : 'undefined'));
     console.log('DASHBOARD_UPDATE_INTERVAL: ' + process.env.DASHBOARD_UPDATE_INTERVAL);
     console.log('WEBHOOK_SECRET: ' + (process.env.WEBHOOK_SECRET ? '********' : 'undefined'));
+    
+    // Ensure environment variables are set using the correct URL format
+    // Remove trailing slashes from URLs to prevent double slashes in API requests
+    if (process.env.SONARR_URL && process.env.SONARR_URL.endsWith('/')) {
+      process.env.SONARR_URL = process.env.SONARR_URL.slice(0, -1);
+      console.log('Normalized SONARR_URL:', process.env.SONARR_URL);
+    }
+    
+    if (process.env.RADARR_URL && process.env.RADARR_URL.endsWith('/')) {
+      process.env.RADARR_URL = process.env.RADARR_URL.slice(0, -1);
+      console.log('Normalized RADARR_URL:', process.env.RADARR_URL);
+    }
+    
+    if (process.env.DOWNLOAD_CLIENT_URL && process.env.DOWNLOAD_CLIENT_URL.endsWith('/')) {
+      process.env.DOWNLOAD_CLIENT_URL = process.env.DOWNLOAD_CLIENT_URL.slice(0, -1);
+      console.log('Normalized DOWNLOAD_CLIENT_URL:', process.env.DOWNLOAD_CLIENT_URL);
+    }
+    
+    // If using qBittorrent with generic variables, set the specific ones
+    if (process.env.DOWNLOAD_CLIENT?.toLowerCase() === 'qbittorrent' && 
+        !process.env.QBITTORRENT_URL && process.env.DOWNLOAD_CLIENT_URL) {
+      process.env.QBITTORRENT_URL = process.env.DOWNLOAD_CLIENT_URL;
+      process.env.QBITTORRENT_USERNAME = process.env.DOWNLOAD_CLIENT_USERNAME;
+      process.env.QBITTORRENT_PASSWORD = process.env.DOWNLOAD_CLIENT_PASSWORD;
+      console.log('Set QBITTORRENT variables from DOWNLOAD_CLIENT variables');
+    }
 
     // Validate required settings
     const requiredSettings = [

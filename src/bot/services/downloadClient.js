@@ -19,6 +19,14 @@ class DownloadClientFactory {
     
     console.log(`Initializing download client: ${clientType || 'none'}`);
     
+    // Set legacy variables from generic ones if needed
+    if (clientType === 'qbittorrent' && !process.env.QBITTORRENT_URL && process.env.DOWNLOAD_CLIENT_URL) {
+      console.log('Setting qBittorrent variables from generic download client variables');
+      process.env.QBITTORRENT_URL = process.env.DOWNLOAD_CLIENT_URL;
+      process.env.QBITTORRENT_USERNAME = process.env.DOWNLOAD_CLIENT_USERNAME;
+      process.env.QBITTORRENT_PASSWORD = process.env.DOWNLOAD_CLIENT_PASSWORD;
+    }
+    
     switch (clientType) {
       case 'qbittorrent':
         return qBittorrentService;

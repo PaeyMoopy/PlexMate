@@ -5,15 +5,23 @@ import fetch from 'node-fetch';
  */
 class ArrService {
   constructor() {
-    // Initialize Sonarr configuration
+    // Initial configuration will be updated with the latest env vars on each API call
+    this.sonarrApiVersion = 'v3'; // Default version
+    this.radarrApiVersion = 'v3'; // Default version
+    
+    // Log configuration status
+    this.checkConfiguration();
+  }
+  
+  /**
+   * Check and log the configuration status
+   */
+  checkConfiguration() {
+    // Get latest environment variables
     this.sonarrUrl = process.env.SONARR_URL;
     this.sonarrApiKey = process.env.SONARR_API_KEY;
-    this.sonarrApiVersion = 'v3'; // Default version
-    
-    // Initialize Radarr configuration
     this.radarrUrl = process.env.RADARR_URL;
     this.radarrApiKey = process.env.RADARR_API_KEY;
-    this.radarrApiVersion = 'v3'; // Default version
     
     if (!this.sonarrUrl || !this.sonarrApiKey) {
       console.warn('Sonarr not configured or environment variables not loaded. Related statistics features will be limited.');
@@ -37,6 +45,9 @@ class ArrService {
    */
   async makeRequest(type, endpoint, options = {}) {
     try {
+      // Always get the latest configuration from environment variables
+      this.checkConfiguration();
+      
       const baseUrl = type === 'sonarr' ? this.sonarrUrl : this.radarrUrl;
       const apiKey = type === 'sonarr' ? this.sonarrApiKey : this.radarrApiKey;
       const apiVersion = type === 'sonarr' ? this.sonarrApiVersion : this.radarrApiVersion;

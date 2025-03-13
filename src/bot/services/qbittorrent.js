@@ -5,9 +5,10 @@ import fetch from 'node-fetch';
  */
 class QBittorrentService {
   constructor() {
-    this.baseUrl = process.env.DOWNLOAD_CLIENT_URL;
-    this.username = process.env.DOWNLOAD_CLIENT_USERNAME;
-    this.password = process.env.DOWNLOAD_CLIENT_PASSWORD;
+    // Try to use the generic download client variables first, then fall back to legacy variables
+    this.baseUrl = process.env.DOWNLOAD_CLIENT_URL || process.env.QBITTORRENT_URL;
+    this.username = process.env.DOWNLOAD_CLIENT_USERNAME || process.env.QBITTORRENT_USERNAME;
+    this.password = process.env.DOWNLOAD_CLIENT_PASSWORD || process.env.QBITTORRENT_PASSWORD;
     this.cookies = null;
     this.isLoggedIn = false;
     
@@ -17,10 +18,34 @@ class QBittorrentService {
   }
 
   /**
+   * Update credentials from environment variables
+   * This ensures we always have the latest credentials
+   */
+  updateCredentials() {
+    this.baseUrl = process.env.DOWNLOAD_CLIENT_URL || process.env.QBITTORRENT_URL;
+    this.username = process.env.DOWNLOAD_CLIENT_USERNAME || process.env.QBITTORRENT_USERNAME;
+    this.password = process.env.DOWNLOAD_CLIENT_PASSWORD || process.env.QBITTORRENT_PASSWORD;
+    
+    // If URL has trailing slash, remove it
+    if (this.baseUrl && this.baseUrl.endsWith('/')) {
+      this.baseUrl = this.baseUrl.slice(0, -1);
+    }
+    
+    // If credentials changed, reset login state
+    if (this.isLoggedIn) {
+      this.isLoggedIn = false;
+      this.cookies = null;
+    }
+  }
+
+  /**
    * Log in to qBittorrent WebUI
    * @returns {Promise<boolean>} Login success
    */
   async login() {
+    // Always get latest credentials
+    this.updateCredentials();
+    
     if (!this.baseUrl || !this.username || !this.password) {
       console.warn('qBittorrent credentials not fully configured.');
       return false;
@@ -31,6 +56,8 @@ class QBittorrentService {
       const body = new URLSearchParams();
       body.append('username', this.username);
       body.append('password', this.password);
+      
+      console.log(`Logging in to qBittorrent at ${this.baseUrl}`);
       
       const response = await fetch(url.toString(), {
         method: 'POST',
@@ -69,6 +96,9 @@ class QBittorrentService {
    * @returns {Promise<any>} API response
    */
   async makeRequest(endpoint, options = {}) {
+    // Always get latest credentials
+    this.updateCredentials();
+    
     if (!this.baseUrl) {
       throw new Error('qBittorrent not configured');
     }
@@ -91,6 +121,8 @@ class QBittorrentService {
           'Cookie': this.cookies
         }
       };
+      
+      console.log(`Making request to qBittorrent at ${url.toString()}`);
       
       const response = await fetch(url.toString(), fetchOptions);
       
