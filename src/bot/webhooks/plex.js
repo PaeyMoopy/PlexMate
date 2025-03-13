@@ -5,6 +5,10 @@ import { client } from '../index.js';
 import { searchTMDB } from '../services/tmdb.js';
 import { EmbedBuilder } from 'discord.js';
 import { getSubscriptionByTitle, updateSubscription, removeSubscription } from '../services/database.js';
+import webhookService from '../services/webhooks.js';
+import tautulliService from '../services/tautulli.js';
+import * as database from '../services/database.js';
+import webhookRoutes from '../../routes/webhooks.js';
 
 export function setupWebhookServer() {
   const app = express();
@@ -491,9 +495,26 @@ export function setupWebhookServer() {
     }
   });
 
+  // Mount additional webhook routes
+  app.use('/api/webhooks', webhookRoutes);
+
+  // Add simple status endpoint
+  app.get('/status', (req, res) => {
+    res.status(200).json({
+      status: 'online',
+      time: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0'
+    });
+  });
+
   // Start server
   const port = process.env.WEBHOOK_PORT || 5000;
   app.listen(port, () => {
     console.log(`Webhook server listening on port ${port}`);
+    console.log(`Webhook URLs:
+    - Plex/Tautulli: http://<your-server>:${port}/webhook
+    - Sonarr: http://<your-server>:${port}/api/webhooks/sonarr
+    - Radarr: http://<your-server>:${port}/api/webhooks/radarr
+    - Tautulli Events: http://<your-server>:${port}/api/webhooks/tautulli`);
   });
 }

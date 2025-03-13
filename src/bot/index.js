@@ -5,6 +5,7 @@ import { handleList } from './commands/list.js';
 import { handleUnsubscribe } from './commands/unsubscribe.js';
 import { handleCommands } from './commands/commands.js';
 import { handleMapping } from './commands/mapping.js';
+import { handleStats, initStatsModule } from './commands/stats.js';
 import { checkForUpdates } from './commands/update.js';
 import { setupWebhookServer } from './webhooks/plex.js';
 import { startRequestChecking } from './services/overseerrRequests.js';
@@ -51,6 +52,17 @@ async function startBot() {
     console.log('ADMIN_CHANNEL_ID: ' + process.env.ADMIN_CHANNEL_ID);
     console.log('OVERSEERR_USER_MAP: ' + process.env.OVERSEERR_USER_MAP);
     console.log('OVERSEERR_FALLBACK_ID: ' + (process.env.OVERSEERR_FALLBACK_ID || '1 (default)'));
+    console.log('TAUTULLI_URL: ' + process.env.TAUTULLI_URL);
+    console.log('TAUTULLI_API_KEY: ' + (process.env.TAUTULLI_API_KEY ? '********' : 'undefined'));
+    console.log('SONARR_URL: ' + process.env.SONARR_URL);
+    console.log('SONARR_API_KEY: ' + (process.env.SONARR_API_KEY ? '********' : 'undefined'));
+    console.log('RADARR_URL: ' + process.env.RADARR_URL);
+    console.log('RADARR_API_KEY: ' + (process.env.RADARR_API_KEY ? '********' : 'undefined'));
+    console.log('QBITTORRENT_URL: ' + process.env.QBITTORRENT_URL);
+    console.log('QBITTORRENT_USERNAME: ' + (process.env.QBITTORRENT_USERNAME ? '********' : 'undefined'));
+    console.log('QBITTORRENT_PASSWORD: ' + (process.env.QBITTORRENT_PASSWORD ? '********' : 'undefined'));
+    console.log('DASHBOARD_UPDATE_INTERVAL: ' + process.env.DASHBOARD_UPDATE_INTERVAL);
+    console.log('WEBHOOK_SECRET: ' + (process.env.WEBHOOK_SECRET ? '********' : 'undefined'));
 
     // Validate required settings
     const requiredSettings = [
@@ -118,6 +130,9 @@ async function startBot() {
       console.log('PlexMate is ready!');
       setupWebhookServer();
       startRequestChecking(); // Start checking for Overseerr requests
+      
+      // Initialize stats module for dashboard
+      await initStatsModule(client);
 
       // Check for updates on startup (silent, just logs to console)
       const updateInfo = await checkForUpdates();
@@ -171,6 +186,14 @@ async function startBot() {
               await message.reply('This command is only available in the admin channel.');
             }
             break;
+          case '!stats':
+            // Admin-only command - check if user is in admin channel
+            if (isAdminChannel) {
+              await handleStats(message, args.slice(1));
+            } else {
+              await message.reply('This command is only available in the admin channel.');
+            }
+            break;
           default:
             break;
         }
@@ -178,6 +201,47 @@ async function startBot() {
         console.error('Error handling command:', error);
         await message.reply('An error occurred while processing your command. Please try again later.')
           .catch(console.error);
+      }
+    });
+
+    // Handle button interactions for stats dashboard
+    client.on(Events.InteractionCreate, async (interaction) => {
+      if (!interaction.isButton()) return;
+      
+      const { customId } = interaction;
+      
+      // Handle dashboard button clicks
+      if (customId.startsWith('dashboard_')) {
+        try {
+          // Defer reply to avoid interaction timeout
+          await interaction.deferReply({ ephemeral: true });
+          
+          switch (customId) {
+            case 'dashboard_refresh':
+              await handleStats(interaction, ['dashboard']);
+              await interaction.editReply('Dashboard refreshed!');
+              break;
+            case 'dashboard_streams':
+              await handleStats(interaction, ['streams']);
+              await interaction.editReply('Streams view displayed.');
+              break;
+            case 'dashboard_downloads':
+              await handleStats(interaction, ['downloads']);
+              await interaction.editReply('Downloads view displayed.');
+              break;
+            case 'dashboard_history':
+              await handleStats(interaction, ['history']);
+              await interaction.editReply('History view displayed.');
+              break;
+            default:
+              await interaction.editReply('Unknown button action.');
+              break;
+          }
+        } catch (error) {
+          console.error('Error handling dashboard button:', error);
+          await interaction.editReply('An error occurred while processing this action.')
+            .catch(console.error);
+        }
       }
     });
 
