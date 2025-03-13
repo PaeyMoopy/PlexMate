@@ -222,10 +222,39 @@ class ArrService {
         }
         mediaType = 'TV Show';
       } else {
-        title = item.movie?.title || 'Unknown Movie';
-        if (item.movie?.year) {
-          title += ` (${item.movie.year})`;
+        // For movies, try to get the title from multiple possible sources
+        title = item.movie?.title;
+        
+        // If no title but we have a filename, try to extract a better title
+        if (!title && item.downloadTitle) {
+          // Extract a cleaner title from the download name
+          // Pattern: Movie.Name.YEAR.QUALITY.etc
+          const downloadTitle = item.downloadTitle;
+          
+          // Extract year if present (YYYY format)
+          const yearMatch = downloadTitle.match(/\.(\d{4})\./);
+          const year = yearMatch ? yearMatch[1] : '';
+          
+          // Get the part before the year, replace dots with spaces, and clean up
+          let cleanTitle = downloadTitle;
+          if (yearMatch) {
+            cleanTitle = downloadTitle.split(yearMatch[0])[0];
+          } else {
+            // If no year found, just take the first few segments
+            const parts = downloadTitle.split('.');
+            cleanTitle = parts.slice(0, Math.min(4, parts.length)).join('.');
+          }
+          
+          // Replace dots with spaces and clean up
+          cleanTitle = cleanTitle.replace(/\./g, ' ').trim();
+          
+          // Add year if found
+          title = cleanTitle + (year ? ` (${year})` : '');
         }
+        
+        // Fall back to Unknown if we still couldn't get a title
+        title = title || 'Unknown Movie';
+        
         mediaType = 'Movie';
       }
       
