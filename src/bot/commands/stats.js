@@ -545,30 +545,76 @@ export async function initStatsModule(client) {
  */
 async function refreshDashboard(message, scroll = false) {
   try {
+    // First check if there's a dashboard in the current channel using our internal tracking
+    const channelId = message.channel.id;
+    if (activeDashboards.has(channelId)) {
+      const dashboard = activeDashboards.get(channelId);
+      const dashboardChannel = message.channel;
+      
+      try {
+        const dashboardMessage = await dashboardChannel.messages.fetch(dashboard.messageId);
+        if (dashboardMessage) {
+          const updatedEmbed = await createDashboardEmbed();
+          await dashboardMessage.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
+          
+          // Send ephemeral acknowledgment for refresh button
+          await message.reply({ content: 'Dashboard refreshed!', ephemeral: true });
+          return;
+        }
+      } catch (err) {
+        console.error('Could not find dashboard message, will try from database:', err);
+        // Continue to database check if message couldn't be found
+      }
+    }
+    
+    // Fallback to checking the database
     const dashboardConfig = database.getDashboardConfig();
     if (!dashboardConfig) {
-      return await message.reply('No active dashboard found.');
+      return await message.reply({ content: 'No active dashboard found. Try creating a new one with !stats dashboard', ephemeral: true });
     }
     
     const dashboardChannel = message.client.channels.cache.get(dashboardConfig.channel_id);
     if (!dashboardChannel) {
-      return await message.reply('Dashboard channel not found.');
+      return await message.reply({ content: 'Dashboard channel not found.', ephemeral: true });
     }
     
-    const dashboardMessage = await dashboardChannel.messages.fetch(dashboardConfig.message_id);
-    if (!dashboardMessage) {
-      return await message.reply('Dashboard message not found.');
-    }
-    
-    const updatedEmbed = await createDashboardEmbed();
-    await dashboardMessage.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
-    
-    if (scroll) {
-      await dashboardChannel.send({ content: `Refreshed dashboard! <#${dashboardChannel.id}>` });
+    try {
+      const dashboardMessage = await dashboardChannel.messages.fetch(dashboardConfig.message_id);
+      if (!dashboardMessage) {
+        return await message.reply({ content: 'Dashboard message not found.', ephemeral: true });
+      }
+      
+      const updatedEmbed = await createDashboardEmbed();
+      await dashboardMessage.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
+      
+      // Add dashboard to active trackers if it's not there
+      if (!activeDashboards.has(dashboardChannel.id)) {
+        const intervalId = setInterval(async () => {
+          try {
+            const updatedEmbed = await createDashboardEmbed();
+            await dashboardMessage.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
+          } catch (error) {
+            console.error('Error updating dashboard:', error);
+            clearInterval(intervalId);
+            activeDashboards.delete(dashboardChannel.id);
+          }
+        }, UPDATE_INTERVAL);
+        
+        activeDashboards.set(dashboardChannel.id, {
+          messageId: dashboardMessage.id,
+          intervalId
+        });
+      }
+      
+      // Send a confirmation
+      await message.reply({ content: 'Dashboard refreshed!', ephemeral: true });
+    } catch (error) {
+      console.error('Error finding or updating dashboard message:', error);
+      return await message.reply({ content: 'Dashboard message not found. Try creating a new one with !stats dashboard', ephemeral: true });
     }
   } catch (error) {
     console.error('Error refreshing dashboard:', error);
-    await message.reply('Failed to refresh dashboard. Check the logs for details.');
+    await message.reply({ content: 'Failed to refresh dashboard. Check the logs for details.', ephemeral: true });
   }
 }
 

@@ -204,7 +204,7 @@ class ArrService {
     return queue.records.map(item => {
       // Calculate progress if available
       const progress = item.status === 'downloading' && item.size > 0 
-        ? Math.round((item.sizeleft / item.size) * 100) 
+        ? Math.round(((item.size - item.sizeleft) / item.size) * 100) 
         : 0;
       
       // Format media title based on type
