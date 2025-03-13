@@ -1,6 +1,6 @@
 # Webhook Setup Guide for PlexMate
 
-This guide explains how to set up webhooks in Sonarr, Radarr, and Tautulli to work with the PlexMate bot and enable the statistics dashboard functionality.
+This guide explains how to set up the required API connections and webhooks for PlexMate.
 
 ## Prerequisites
 
@@ -36,43 +36,27 @@ PlexMate supports the following download clients:
 
 2. The API Key can be found in SABnzbd's Config > General section
 
-## Setting Up Sonarr Webhooks
+## API Configuration
 
-1. Log in to your Sonarr web interface
-2. Go to **Settings** → **Connect**
-3. Click the **+** button to add a new connection
-4. Select **Webhook** from the list
-5. Configure the webhook with the following settings:
-   - **Name**: PlexMate
-   - **On Grab**: Enabled ✓
-   - **On Import/Upgrade**: Enabled ✓
-   - **On Delete**: Enabled ✓
-   - **On Series Delete**: Enabled ✓
-   - **URL**: `http://your-server-ip:3000/api/webhooks/sonarr`
-     - Replace `your-server-ip` with the IP address of the server running PlexMate
-     - Replace `3000` with your `WEBHOOK_PORT` if different
-   - **Method**: POST
-6. Click **Test** to ensure the connection works
-7. Click **Save**
+### Sonarr API Setup
 
-## Setting Up Radarr Webhooks
+1. Set the following environment variables in your `.env` file:
+   ```
+   SONARR_URL=http://your-sonarr-url:8989
+   SONARR_API_KEY=your_sonarr_api_key
+   ```
 
-1. Log in to your Radarr web interface
-2. Go to **Settings** → **Connect**
-3. Click the **+** button to add a new connection
-4. Select **Webhook** from the list
-5. Configure the webhook with the following settings:
-   - **Name**: PlexMate
-   - **On Grab**: Enabled ✓
-   - **On Import/Upgrade**: Enabled ✓
-   - **On Movie Delete**: Enabled ✓
-   - **On Movie File Delete**: Enabled ✓
-   - **URL**: `http://your-server-ip:3000/api/webhooks/radarr`
-     - Replace `your-server-ip` with the IP address of the server running PlexMate
-     - Replace `3000` with your `WEBHOOK_PORT` if different
-   - **Method**: POST
-6. Click **Test** to ensure the connection works
-7. Click **Save**
+2. You can find your API key in Sonarr under Settings > General
+
+### Radarr API Setup
+
+1. Set the following environment variables in your `.env` file:
+   ```
+   RADARR_URL=http://your-radarr-url:7878
+   RADARR_API_KEY=your_radarr_api_key
+   ```
+
+2. You can find your API key in Radarr under Settings > General
 
 ## Setting Up Tautulli Webhooks
 
@@ -119,21 +103,20 @@ PlexMate supports the following download clients:
 
 8. Click **Save**
 
-## Verifying Webhook Setup
+## Verifying Setup
 
-To verify that your webhooks are set up correctly:
+To verify that your setup is working correctly:
 
-1. In Sonarr/Radarr, you can use the **Test** button on the webhook configuration page
-2. Check PlexMate logs for confirmation messages when webhooks are received
-3. Run the `!stats` command in your Discord admin channel to see if data is being collected
-4. Set up a dashboard with `!stats dashboard` to see real-time updates
+1. Check PlexMate logs for any warning or error messages
+2. Run the `!stats` command in your Discord admin channel to see if data is being collected
+3. Set up a dashboard with `!stats dashboard` to see real-time updates
 
 ## Troubleshooting
 
-If webhooks are not working correctly:
+If you're experiencing issues:
 
-1. Verify that the PlexMate bot is running and the webhook server is active
-2. Check that the server IP address and port are correct
-3. Check firewall settings to ensure the webhook port is accessible
-4. Examine PlexMate logs for any error messages
-5. Verify network connectivity between your applications and the PlexMate server
+1. Verify that your environment variables are correctly set in the `.env` file
+2. Check that the URLs are accessible from the server running PlexMate
+3. Ensure API keys have the correct permissions
+4. Check PlexMate logs for any error messages
+5. Restart the PlexMate service after making changes to the `.env` file

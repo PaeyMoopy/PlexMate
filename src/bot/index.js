@@ -58,6 +58,11 @@ async function startBot() {
     console.log('SONARR_API_KEY: ' + (process.env.SONARR_API_KEY ? '********' : 'undefined'));
     console.log('RADARR_URL: ' + process.env.RADARR_URL);
     console.log('RADARR_API_KEY: ' + (process.env.RADARR_API_KEY ? '********' : 'undefined'));
+    console.log('DOWNLOAD_CLIENT: ' + process.env.DOWNLOAD_CLIENT);
+    console.log('DOWNLOAD_CLIENT_URL: ' + process.env.DOWNLOAD_CLIENT_URL);
+    console.log('DOWNLOAD_CLIENT_USERNAME: ' + (process.env.DOWNLOAD_CLIENT_USERNAME ? '********' : 'undefined'));
+    console.log('DOWNLOAD_CLIENT_PASSWORD: ' + (process.env.DOWNLOAD_CLIENT_PASSWORD ? '********' : 'undefined'));
+    console.log('DOWNLOAD_CLIENT_API_KEY: ' + (process.env.DOWNLOAD_CLIENT_API_KEY ? '********' : 'undefined'));
     console.log('QBITTORRENT_URL: ' + process.env.QBITTORRENT_URL);
     console.log('QBITTORRENT_USERNAME: ' + (process.env.QBITTORRENT_USERNAME ? '********' : 'undefined'));
     console.log('QBITTORRENT_PASSWORD: ' + (process.env.QBITTORRENT_PASSWORD ? '********' : 'undefined'));

@@ -8,17 +8,23 @@ class ArrService {
     // Initialize Sonarr configuration
     this.sonarrUrl = process.env.SONARR_URL;
     this.sonarrApiKey = process.env.SONARR_API_KEY;
+    this.sonarrApiVersion = 'v3'; // Default version
     
     // Initialize Radarr configuration
     this.radarrUrl = process.env.RADARR_URL;
     this.radarrApiKey = process.env.RADARR_API_KEY;
+    this.radarrApiVersion = 'v3'; // Default version
     
     if (!this.sonarrUrl || !this.sonarrApiKey) {
-      console.warn('Sonarr not configured. Related statistics features will be limited.');
+      console.warn('Sonarr not configured or environment variables not loaded. Related statistics features will be limited.');
+    } else {
+      console.log('Sonarr configured with URL:', this.sonarrUrl);
     }
     
     if (!this.radarrUrl || !this.radarrApiKey) {
-      console.warn('Radarr not configured. Related statistics features will be limited.');
+      console.warn('Radarr not configured or environment variables not loaded. Related statistics features will be limited.');
+    } else {
+      console.log('Radarr configured with URL:', this.radarrUrl);
     }
   }
 
@@ -30,15 +36,25 @@ class ArrService {
    * @returns {Promise<Object>} API response
    */
   async makeRequest(type, endpoint, options = {}) {
-    const baseUrl = type === 'sonarr' ? this.sonarrUrl : this.radarrUrl;
-    const apiKey = type === 'sonarr' ? this.sonarrApiKey : this.radarrApiKey;
-    
-    if (!baseUrl || !apiKey) {
-      throw new Error(`${type} not configured`);
-    }
-    
     try {
-      const url = new URL(`${baseUrl}/api/v3/${endpoint}`);
+      const baseUrl = type === 'sonarr' ? this.sonarrUrl : this.radarrUrl;
+      const apiKey = type === 'sonarr' ? this.sonarrApiKey : this.radarrApiKey;
+      const apiVersion = type === 'sonarr' ? this.sonarrApiVersion : this.radarrApiVersion;
+      
+      if (!baseUrl || !apiKey) {
+        console.error(`${type} not configured - missing URL or API key`);
+        throw new Error(`${type} not configured`);
+      }
+      
+      // Build URL with more robust error handling
+      let url;
+      try {
+        // Try standard API path format first
+        url = new URL(`${baseUrl}/api/${apiVersion}/${endpoint}`);
+      } catch (e) {
+        console.error(`Invalid ${type} URL:`, baseUrl);
+        throw new Error(`Invalid ${type} URL: ${baseUrl}`);
+      }
       
       const fetchOptions = {
         headers: {
@@ -48,15 +64,28 @@ class ArrService {
         ...options
       };
       
+      console.log(`Making ${type} API request to: ${url.toString()}`);
+      
       const response = await fetch(url.toString(), fetchOptions);
       
       if (!response.ok) {
+        const errorText = await response.text().catch(() => 'No error details available');
+        console.error(`${type} API error:`, response.status, response.statusText, errorText);
+        
+        // Try fallback to v1 API if v3 fails with 404
+        if (response.status === 404 && apiVersion === 'v3') {
+          console.log(`Trying fallback to v1 API for ${type}...`);
+          if (type === 'sonarr') this.sonarrApiVersion = 'v1';
+          else this.radarrApiVersion = 'v1';
+          return this.makeRequest(type, endpoint, options);
+        }
+        
         throw new Error(`${type} API error: ${response.status} ${response.statusText}`);
       }
       
       return response.json();
     } catch (error) {
-      console.error(`Error making ${type} request:`, error);
+      console.error(`Error making ${type} request:`, error.message);
       throw error;
     }
   }
