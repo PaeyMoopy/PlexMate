@@ -713,12 +713,9 @@ async function refreshDashboard(message, scroll = false) {
  */
 async function createDownloadsEmbed() {
   try {
-    // Fetch download data
-    const sonarrService = new ArrService('sonarr');
-    const radarrService = new ArrService('radarr');
-    
-    const sonarrQueue = await sonarrService.getQueue();
-    const radarrQueue = await radarrService.getQueue();
+    // Fetch download data using existing helper functions
+    const sonarrQueue = await getSonarrQueue();
+    const radarrQueue = await getRadarrQueue();
     const downloadClientData = await getDownloadClientData();
     
     // Record completed downloads for history
@@ -836,22 +833,6 @@ async function createDownloadsEmbed() {
     
     return embed;
   }
-}
-
-/**
- * Format bytes to a human-readable format
- */
-function formatBytes(bytes, decimals = 2) {
-  if (bytes === 0) return '0 Bytes';
-  if (!bytes) return 'Unknown';
-  
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-  
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
 /**
@@ -1032,4 +1013,20 @@ async function stopDashboard(message) {
     console.error('Error stopping dashboard:', error);
     await message.reply('Failed to stop the dashboard. Check the logs for details.');
   }
+}
+
+/**
+ * Format bytes to a human-readable format
+ */
+function formatBytes(bytes, decimals = 2) {
+  if (bytes === 0) return '0 Bytes';
+  if (!bytes) return 'Unknown';
+  
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }

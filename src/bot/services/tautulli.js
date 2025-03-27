@@ -159,15 +159,23 @@ class TautulliService {
       // Format media title
       let title = '';
       if (session.media_type === 'episode') {
-        title = `${session.grandparent_title} - S${session.parent_media_index}E${session.media_index}`;
-      } else {
+        title = `${session.grandparent_title} - S${session.parent_title.replace(/[^0-9]/g, '')}E${session.media_index} - ${session.title}`;
+      } else if (session.media_type === 'movie') {
         title = session.title;
-        if (session.year) title += ` (${session.year})`;
+        if (session.year) {
+          title += ` (${session.year})`;
+        }
+      } else {
+        title = session.title || 'Unknown';
       }
-
+      
       return {
-        user: session.friendly_name,
+        user: session.friendly_name || session.username || 'Unknown',
         title,
+        state: session.state || 'playing',
+        sessionId: session.session_id, 
+        duration: session.duration || 0,
+        player: session.player || 'Unknown',
         progress,
         quality,
         device: session.player,
