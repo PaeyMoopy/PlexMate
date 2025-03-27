@@ -179,19 +179,12 @@ async function createStreamsEmbed() {
     if (streams && streams.length > 0) {
       streams.forEach(stream => {
         try {
-          // Check by user and title first (more reliable)
-          const existingUserTitleRecord = database.checkWatchHistoryExistsByUserAndTitle(
-            stream.user, 
-            stream.title, 
-            stream.mediaType
-          );
+          // Check by session ID only - simplifying our approach
+          const existingRecord = database.checkWatchHistoryExists(stream.sessionId);
           
-          // Then check by session ID as backup
-          const existingSessionRecord = database.checkWatchHistoryExists(stream.sessionId);
+          console.log(`Stream check for ${stream.title}: exists=${!!existingRecord}`);
           
-          console.log(`Stream check results for ${stream.title}: User/Title exists=${!!existingUserTitleRecord}, SessionID exists=${!!existingSessionRecord}`);
-          
-          if (!existingUserTitleRecord && !existingSessionRecord) {
+          if (!existingRecord) {
             console.log(`Recording stream in history: ${stream.title} (${stream.progress}% complete)`);
             database.addWatchHistory(
               stream.user,
@@ -402,19 +395,12 @@ async function createDashboardEmbed() {
       if (streamData && streamData.length > 0) {
         streamData.forEach(stream => {
           try {
-            // Check by user and title first (more reliable)
-            const existingUserTitleRecord = database.checkWatchHistoryExistsByUserAndTitle(
-              stream.user, 
-              stream.title, 
-              stream.mediaType
-            );
+            // Check by session ID only - simplifying our approach
+            const existingRecord = database.checkWatchHistoryExists(stream.sessionId);
             
-            // Then check by session ID as backup
-            const existingSessionRecord = database.checkWatchHistoryExists(stream.sessionId);
+            console.log(`Stream check results for ${stream.title}: exists=${!!existingRecord}`);
             
-            console.log(`Stream check results for ${stream.title}: User/Title exists=${!!existingUserTitleRecord}, SessionID exists=${!!existingSessionRecord}`);
-            
-            if (!existingUserTitleRecord && !existingSessionRecord) {
+            if (!existingRecord) {
               console.log(`Dashboard refresh: Recording stream in history: ${stream.title}`);
               database.addWatchHistory(
                 stream.user,
