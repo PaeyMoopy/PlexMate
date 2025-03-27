@@ -380,6 +380,27 @@ async function createDashboardEmbed() {
     const activity = await tautulliService.getActivity().catch(() => null);
     if (activity) {
       const streamData = tautulliService.formatStreamData(activity);
+      
+      // Record streams to history during dashboard refresh
+      if (streamData && streamData.length > 0) {
+        streamData.forEach(stream => {
+          // Check if this session has already been recorded to avoid duplicates
+          const existingRecord = database.checkWatchHistoryExists(stream.sessionId);
+          if (!existingRecord) {
+            console.log(`Dashboard refresh: Recording stream in history: ${stream.title}`);
+            database.addWatchHistory(
+              stream.user,
+              stream.title,
+              stream.mediaType,
+              stream.duration || 0,
+              stream.player || 'Unknown',
+              stream.quality || 'Unknown',
+              stream.sessionId
+            );
+          }
+        });
+      }
+      
       const streamCount = streamData.length;
       const streamField = streamCount > 0
         ? streamData.map(stream => {
@@ -397,6 +418,49 @@ async function createDashboardEmbed() {
     try {
       const sonarrQueue = await getSonarrQueue();
       const radarrQueue = await getRadarrQueue();
+      
+      // Record downloads to history during dashboard refresh
+      // Sonarr TV Shows
+      if (sonarrQueue && sonarrQueue.length > 0) {
+        sonarrQueue.forEach(item => {
+          // Check if this download has already been recorded
+          const existingRecord = database.checkDownloadHistoryExists('sonarr', item.title);
+          if (!existingRecord) {
+            console.log(`Dashboard refresh: Recording TV download in history: ${item.title}`);
+            database.addDownloadHistory(
+              'download',
+              'sonarr',
+              'episode',
+              item.title,
+              item.quality || 'Unknown',
+              item.size ? formatBytes(item.size) : 'Unknown',
+              'download_in_progress',
+              JSON.stringify({ id: item.id })
+            );
+          }
+        });
+      }
+      
+      // Radarr Movies
+      if (radarrQueue && radarrQueue.length > 0) {
+        radarrQueue.forEach(item => {
+          // Check if this download has already been recorded
+          const existingRecord = database.checkDownloadHistoryExists('radarr', item.title);
+          if (!existingRecord) {
+            console.log(`Dashboard refresh: Recording movie download in history: ${item.title}`);
+            database.addDownloadHistory(
+              'download',
+              'radarr',
+              'movie',
+              item.title,
+              item.quality || 'Unknown',
+              item.size ? formatBytes(item.size) : 'Unknown',
+              'download_in_progress',
+              JSON.stringify({ id: item.id })
+            );
+          }
+        });
+      }
       
       const tvCount = sonarrQueue?.length || 0;
       const movieCount = radarrQueue?.length || 0;
