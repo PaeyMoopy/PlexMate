@@ -174,25 +174,22 @@ async function createStreamsEmbed() {
     const activity = await tautulliService.getActivity();
     const streams = tautulliService.formatStreamData(activity);
     
-    // Store completed or nearly completed streams in history
+    // Store all streams in history - don't filter by progress
     if (streams && streams.length > 0) {
       streams.forEach(stream => {
-        // If progress is greater than 90%, consider it viewed for history
-        if (stream.progress > 90) {
-          // Check if this session has already been recorded to avoid duplicates
-          const existingRecord = database.checkWatchHistoryExists(stream.sessionId);
-          if (!existingRecord) {
-            console.log(`Recording history for nearly complete stream: ${stream.title}`);
-            database.addWatchHistory(
-              stream.user,
-              stream.title,
-              stream.mediaType,
-              stream.duration || 0,
-              stream.player || 'Unknown',
-              stream.quality || 'Unknown',
-              stream.sessionId
-            );
-          }
+        // Check if this session has already been recorded to avoid duplicates
+        const existingRecord = database.checkWatchHistoryExists(stream.sessionId);
+        if (!existingRecord) {
+          console.log(`Recording stream in history: ${stream.title} (${stream.progress}% complete)`);
+          database.addWatchHistory(
+            stream.user,
+            stream.title,
+            stream.mediaType,
+            stream.duration || 0,
+            stream.player || 'Unknown',
+            stream.quality || 'Unknown',
+            stream.sessionId
+          );
         }
       });
     }
@@ -721,27 +718,24 @@ async function createDownloadsEmbed() {
     const radarrQueue = await getRadarrQueue();
     const downloadClientData = await getDownloadClientData();
     
-    // Record completed downloads for history
+    // Record all downloads for history - don't filter by progress
     // Sonarr TV Shows
     if (sonarrQueue && sonarrQueue.length > 0) {
       sonarrQueue.forEach(item => {
-        // If download is complete or nearly complete (>95%), record it
-        if (item.progress > 95) {
-          // Check if this download has already been recorded
-          const existingRecord = database.checkDownloadHistoryExists('sonarr', item.title);
-          if (!existingRecord) {
-            console.log(`Recording history for completed TV download: ${item.title}`);
-            database.addDownloadHistory(
-              'download',
-              'sonarr',
-              'episode',
-              item.title,
-              item.quality || 'Unknown',
-              item.size ? formatBytes(item.size) : 'Unknown',
-              'completed',
-              JSON.stringify({ id: item.id })
-            );
-          }
+        // Check if this download has already been recorded
+        const existingRecord = database.checkDownloadHistoryExists('sonarr', item.title);
+        if (!existingRecord) {
+          console.log(`Recording TV download in history: ${item.title} (${item.progress}% complete)`);
+          database.addDownloadHistory(
+            'download',
+            'sonarr',
+            'episode',
+            item.title,
+            item.quality || 'Unknown',
+            item.size ? formatBytes(item.size) : 'Unknown',
+            'download_in_progress',
+            JSON.stringify({ id: item.id })
+          );
         }
       });
     }
@@ -749,23 +743,20 @@ async function createDownloadsEmbed() {
     // Radarr Movies
     if (radarrQueue && radarrQueue.length > 0) {
       radarrQueue.forEach(item => {
-        // If download is complete or nearly complete (>95%), record it
-        if (item.progress > 95) {
-          // Check if this download has already been recorded
-          const existingRecord = database.checkDownloadHistoryExists('radarr', item.title);
-          if (!existingRecord) {
-            console.log(`Recording history for completed movie download: ${item.title}`);
-            database.addDownloadHistory(
-              'download',
-              'radarr',
-              'movie',
-              item.title,
-              item.quality || 'Unknown',
-              item.size ? formatBytes(item.size) : 'Unknown',
-              'completed',
-              JSON.stringify({ id: item.id })
-            );
-          }
+        // Check if this download has already been recorded
+        const existingRecord = database.checkDownloadHistoryExists('radarr', item.title);
+        if (!existingRecord) {
+          console.log(`Recording movie download in history: ${item.title} (${item.progress}% complete)`);
+          database.addDownloadHistory(
+            'download',
+            'radarr',
+            'movie',
+            item.title,
+            item.quality || 'Unknown',
+            item.size ? formatBytes(item.size) : 'Unknown',
+            'download_in_progress',
+            JSON.stringify({ id: item.id })
+          );
         }
       });
     }
@@ -946,52 +937,105 @@ async function createHistoryEmbed() {
  */
 async function addSampleHistoryData(message) {
   try {
-    // Add some sample watch history data
+    // Add sample TV shows to watch history
     database.addWatchHistory(
-      'SampleUser',
-      'SampleMovie',
-      'movie',
-      120,
-      'SamplePlayer',
+      'PlexUser1',
+      'Succession - S03E05 - Retirement Plans',
+      'episode',
+      45 * 60, // 45 minutes in seconds
+      'Roku TV',
       '1080p',
-      'sample_session_id'
+      'sample_session_id_1'
     );
     database.addWatchHistory(
-      'SampleUser',
-      'SampleEpisode',
+      'PlexUser2',
+      'Arcane - S01E06 - When These Walls Come Tumbling Down',
       'episode',
-      30,
-      'SamplePlayer',
-      '1080p',
-      'sample_session_id'
+      40 * 60, // 40 minutes in seconds
+      'Web Browser',
+      '4K',
+      'sample_session_id_2'
     );
     
-    // Add some sample download history data
+    // Add sample movies to watch history
+    database.addWatchHistory(
+      'PlexUser1',
+      'Dune (2021)',
+      'movie',
+      155 * 60, // 2 hours 35 minutes in seconds
+      'Apple TV',
+      '4K HDR',
+      'sample_session_id_3'
+    );
+    database.addWatchHistory(
+      'PlexUser3',
+      'The Batman (2022)',
+      'movie',
+      176 * 60, // 2 hours 56 minutes in seconds
+      'Samsung TV',
+      '1080p',
+      'sample_session_id_4'
+    );
+    
+    // Add sample music to watch history
+    database.addWatchHistory(
+      'PlexUser2',
+      'Album: 1989 - Taylor Swift',
+      'track',
+      45 * 60, // 45 minutes total playtime
+      'Mobile App',
+      '320kbps',
+      'sample_session_id_5'
+    );
+    
+    // Add sample TV show downloads
     database.addDownloadHistory(
       'download',
       'sonarr',
       'episode',
-      'SampleEpisode',
-      '1080p',
-      '1.5 GB',
-      'completed',
-      JSON.stringify({ id: 'sample_download_id' })
+      'The Last of Us - S01E09 - Look for the Light',
+      '1080p WEB-DL',
+      '2.5 GB',
+      'qBittorrent',
+      JSON.stringify({ id: 'sample_dl_id_1' })
+    );
+    database.addDownloadHistory(
+      'download',
+      'sonarr',
+      'episode',
+      'House of the Dragon - S01E10 - The Black Queen',
+      '4K AMZN WEB-DL',
+      '8.5 GB',
+      'qBittorrent',
+      JSON.stringify({ id: 'sample_dl_id_2' })
+    );
+    
+    // Add sample movie downloads
+    database.addDownloadHistory(
+      'download',
+      'radarr',
+      'movie',
+      'Oppenheimer (2023)',
+      '4K HDR BluRay',
+      '65 GB',
+      'qBittorrent',
+      JSON.stringify({ id: 'sample_dl_id_3' })
     );
     database.addDownloadHistory(
       'download',
       'radarr',
       'movie',
-      'SampleMovie',
-      '1080p',
-      '5 GB',
-      'completed',
-      JSON.stringify({ id: 'sample_download_id' })
+      'Barbie (2023)',
+      '1080p WEB-DL',
+      '12 GB',
+      'qBittorrent',
+      JSON.stringify({ id: 'sample_dl_id_4' })
     );
     
-    await message.reply('Sample history data added successfully!');
+    await message.reply('✅ Sample history data added successfully! Run `!stats history` to view it.');
   } catch (error) {
     console.error('Error adding sample history data:', error);
-    await message.reply('Failed to add sample history data. Check the logs for details.');
+    await message.reply('❌ Failed to add sample history data. Check the logs for details.');
   }
 }
 
