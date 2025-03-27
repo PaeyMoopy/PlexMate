@@ -545,14 +545,22 @@ export async function initStatsModule(client) {
  */
 async function refreshDashboard(message, scroll = false) {
   try {
+    console.log('Refreshing dashboard, activeDashboards:', Array.from(activeDashboards.keys()));
+    
     // First check if there's a dashboard in the current channel using our internal tracking
     const channelId = message.channel.id;
+    console.log('Current channel ID:', channelId);
+    
+    // Get the dashboard config from database first for reference
+    const dashboardConfig = database.getDashboardConfig();
+    console.log('Dashboard config from database:', dashboardConfig);
+    
     if (activeDashboards.has(channelId)) {
       const dashboard = activeDashboards.get(channelId);
-      const dashboardChannel = message.channel;
+      console.log('Found dashboard in memory:', dashboard);
       
       try {
-        const dashboardMessage = await dashboardChannel.messages.fetch(dashboard.messageId);
+        const dashboardMessage = await message.channel.messages.fetch(dashboard.messageId);
         if (dashboardMessage) {
           const updatedEmbed = await createDashboardEmbed();
           await dashboardMessage.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
@@ -562,33 +570,49 @@ async function refreshDashboard(message, scroll = false) {
           return;
         }
       } catch (err) {
-        console.error('Could not find dashboard message, will try from database:', err);
-        // Continue to database check if message couldn't be found
+        console.error('Could not find dashboard message in memory, trying database:', err);
       }
+    } else {
+      console.log('No dashboard found in memory for channel:', channelId);
     }
     
-    // Fallback to checking the database
-    const dashboardConfig = database.getDashboardConfig();
+    // If we get here, we need to check the database
     if (!dashboardConfig) {
-      return await message.reply({ content: 'No active dashboard found. Try creating a new one with !stats dashboard', ephemeral: true });
+      // Create a new dashboard instead of just showing an error
+      console.log('No dashboard config found in database, creating a new one');
+      await message.reply({ content: 'No active dashboard found. Creating a new one...', ephemeral: true });
+      return await createDashboard(message);
     }
     
-    const dashboardChannel = message.client.channels.cache.get(dashboardConfig.channel_id);
-    if (!dashboardChannel) {
-      return await message.reply({ content: 'Dashboard channel not found.', ephemeral: true });
+    console.log('Using dashboard config from database:', dashboardConfig);
+    const configChannelId = dashboardConfig.channel_id;
+    
+    // If the config has a different channel ID than current channel, warn the user
+    if (configChannelId !== channelId) {
+      console.log(`Dashboard is in a different channel. Config channel: ${configChannelId}, Current channel: ${channelId}`);
+      await message.reply({ 
+        content: `Dashboard is in a different channel. Please go to <#${configChannelId}> to use it.`,
+        ephemeral: true 
+      });
+      return;
     }
     
     try {
+      const dashboardChannel = message.channel;
       const dashboardMessage = await dashboardChannel.messages.fetch(dashboardConfig.message_id);
+      
       if (!dashboardMessage) {
-        return await message.reply({ content: 'Dashboard message not found.', ephemeral: true });
+        console.log('Dashboard message not found in channel, creating a new one');
+        await message.reply({ content: 'Dashboard message not found. Creating a new one...', ephemeral: true });
+        return await createDashboard(message);
       }
       
       const updatedEmbed = await createDashboardEmbed();
       await dashboardMessage.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
       
       // Add dashboard to active trackers if it's not there
-      if (!activeDashboards.has(dashboardChannel.id)) {
+      if (!activeDashboards.has(channelId)) {
+        console.log('Adding dashboard to active trackers');
         const intervalId = setInterval(async () => {
           try {
             const updatedEmbed = await createDashboardEmbed();
@@ -596,11 +620,11 @@ async function refreshDashboard(message, scroll = false) {
           } catch (error) {
             console.error('Error updating dashboard:', error);
             clearInterval(intervalId);
-            activeDashboards.delete(dashboardChannel.id);
+            activeDashboards.delete(channelId);
           }
         }, UPDATE_INTERVAL);
         
-        activeDashboards.set(dashboardChannel.id, {
+        activeDashboards.set(channelId, {
           messageId: dashboardMessage.id,
           intervalId
         });
@@ -610,7 +634,8 @@ async function refreshDashboard(message, scroll = false) {
       await message.reply({ content: 'Dashboard refreshed!', ephemeral: true });
     } catch (error) {
       console.error('Error finding or updating dashboard message:', error);
-      return await message.reply({ content: 'Dashboard message not found. Try creating a new one with !stats dashboard', ephemeral: true });
+      await message.reply({ content: 'Dashboard message not found. Creating a new one...', ephemeral: true });
+      return await createDashboard(message);
     }
   } catch (error) {
     console.error('Error refreshing dashboard:', error);

@@ -376,9 +376,25 @@ export function cleanupOldStreams() {
 /**
  * Update dashboard configuration
  */
-export function updateDashboardConfig(messageId, channelId, updateInterval = 60000) {
+export function updateDashboardConfig(config) {
   try {
-    upsertDashboardConfigStmt.run(messageId, channelId, updateInterval);
+    // Handle both object format and individual parameters for backward compatibility
+    if (typeof config === 'object') {
+      const messageId = config.message_id;
+      const channelId = config.channel_id;
+      const updateInterval = config.interval || 60000;
+      
+      console.log('Updating dashboard config with:', messageId, channelId, updateInterval);
+      upsertDashboardConfigStmt.run(messageId, channelId, updateInterval);
+    } else {
+      // For backward compatibility if called with separate parameters
+      const messageId = arguments[0];
+      const channelId = arguments[1];
+      const updateInterval = arguments[2] || 60000;
+      
+      console.log('Updating dashboard config (legacy) with:', messageId, channelId, updateInterval);
+      upsertDashboardConfigStmt.run(messageId, channelId, updateInterval);
+    }
     return true;
   } catch (error) {
     console.error('Error updating dashboard config:', error);
