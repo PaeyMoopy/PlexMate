@@ -154,7 +154,7 @@ class TautulliService {
       
       // Get media type emojis
       const mediaTypeEmoji = session.media_type === 'episode' ? '📺' : 
-                             session.media_type === 'movie' ? '🎬' : '🎭';
+                             session.media_type === 'movie' ? '🎬' : '🎵';
       
       // Format media title
       let title = '';

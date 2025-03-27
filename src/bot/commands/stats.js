@@ -6,6 +6,7 @@ import * as database from '../services/database.js';
 
 // Statistics dashboard update interval in ms (default: 1 minute)
 const UPDATE_INTERVAL = parseInt(process.env.DASHBOARD_UPDATE_INTERVAL || '60000', 10);
+console.log(`Dashboard update interval set to: ${UPDATE_INTERVAL}ms`);
 
 // Store active dashboards to update them periodically
 const activeDashboards = new Map();
@@ -744,14 +745,18 @@ async function refreshDashboard(message, scroll = false) {
         console.log('Adding dashboard to active trackers');
         const intervalId = setInterval(async () => {
           try {
+            console.log(`Auto-refreshing dashboard in channel ${channelId}`);
             const updatedEmbed = await createDashboardEmbed();
             await dashboardMessage.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
+            console.log(`Dashboard in channel ${channelId} refreshed successfully`);
           } catch (error) {
             console.error('Error updating dashboard:', error);
             clearInterval(intervalId);
             activeDashboards.delete(channelId);
           }
         }, UPDATE_INTERVAL);
+        
+        console.log(`Set up auto-refresh interval (ID: ${intervalId}) with period: ${UPDATE_INTERVAL}ms`);
         
         activeDashboards.set(channelId, {
           messageId: dashboardMessage.id,
@@ -943,8 +948,10 @@ async function createHistoryEmbed() {
         // Handle different column names that might come from the database
         const mediaType = stat.mediaType || stat.media_type || 'Unknown';
         const count = stat.count || 0;
+        // Format media type display names (change 'track' to 'music')
+        const displayMediaType = mediaType === 'track' ? 'music' : mediaType;
         const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${mediaType}: ${count} views`;
+        return `${emoji} ${displayMediaType}: ${count} views`;
       }).join('\n');
       
       embed.addFields({ name: '📊 Media Types', value: fieldValue || 'No activity' });
@@ -1146,14 +1153,18 @@ async function createDashboard(message) {
     // Set up interval to update the dashboard
     const intervalId = setInterval(async () => {
       try {
+        console.log(`Auto-refreshing dashboard in channel ${channel.id}`);
         const updatedEmbed = await createDashboardEmbed();
         await dashboardMsg.edit({ embeds: [updatedEmbed], components: createDashboardControls() });
+        console.log(`Dashboard in channel ${channel.id} refreshed successfully`);
       } catch (error) {
         console.error('Error updating dashboard:', error);
         clearInterval(intervalId);
         activeDashboards.delete(channel.id);
       }
     }, UPDATE_INTERVAL);
+    
+    console.log(`Set up auto-refresh interval (ID: ${intervalId}) with period: ${UPDATE_INTERVAL}ms`);
     
     // Store active dashboard information
     activeDashboards.set(channel.id, {
