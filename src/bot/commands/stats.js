@@ -529,9 +529,27 @@ async function createDashboardEmbed() {
     
     // Add recent views
     try {
-      const recentHistory = database.getRecentWatchHistory(5);
+      // Attempt to get full history first to see all entries
+      console.log('Getting full watch history for dashboard...');
+      const allHistory = database.getAllWatchHistory();
+      console.log(`Total watch history entries: ${allHistory.length}`);
+      
+      // Get distinct history for display
+      const recentHistory = database.getRecentWatchHistory(10);
+      console.log(`Dashboard displaying ${recentHistory?.length || 0} recent watch history items`);
+      
       if (recentHistory && recentHistory.length > 0) {
         const fieldValue = recentHistory.map(item => {
+          const mediaType = item.media_type || item.mediaType || 'Unknown';
+          const username = item.user || item.username || 'Unknown';
+          const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
+          return `${emoji} **${item.title}** (${username})`;
+        }).join('\n');
+        
+        embed.addFields({ name: '🔍 Recent Views', value: fieldValue });
+      } else if (allHistory && allHistory.length > 0) {
+        // Fallback to displaying all history if the distinct query didn't work
+        const fieldValue = allHistory.slice(0, 10).map(item => {
           const mediaType = item.media_type || item.mediaType || 'Unknown';
           const username = item.user || item.username || 'Unknown';
           const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
@@ -548,12 +566,16 @@ async function createDashboardEmbed() {
     
     // Add recent downloads
     try {
-      const recentDownloads = database.getRecentDownloads(5);
+      // Increased limit to ensure we get more entries if available
+      const recentDownloads = database.getRecentDownloads(10);
+      console.log(`Dashboard displaying ${recentDownloads?.length || 0} recent download history items`);
+      
       if (recentDownloads && recentDownloads.length > 0) {
         const fieldValue = recentDownloads.map(item => {
           const mediaType = item.media_type || item.mediaType || 'Unknown';
+          const date = item.timestamp ? new Date(item.timestamp).toLocaleDateString() : (item.date || 'Unknown date');
           const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '📁';
-          return `${emoji} **${item.title}** - ${item.quality || 'Unknown'}`;
+          return `${emoji} **${item.title}** - ${item.quality || 'Unknown quality'} (${date})`;
         }).join('\n');
         
         embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue });
@@ -1025,31 +1047,67 @@ async function createHistoryEmbed() {
       embed.addFields({ name: '\u200B', value: '━━━━━━━━━━━━━━━━━━━━━━━━' });
     }
     
-    // Add recent views if available
-    if (recentHistory && recentHistory.length > 0) {
-      const fieldValue = recentHistory.map(item => {
-        const mediaType = item.media_type || item.mediaType || 'Unknown';
-        const username = item.user || item.username || 'Unknown';
-        const date = item.watched_at ? new Date(item.watched_at).toLocaleDateString() : (item.date || 'Unknown date');
-        const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
-        return `${emoji} **${item.title}** - ${username} (${date})`;
-      }).join('\n');
+    // Add recent views to command reply
+    try {
+      // Attempt to get full history first to see all entries
+      console.log('Getting full watch history for debugging...');
+      const allHistory = database.getAllWatchHistory();
+      console.log(`Total watch history entries: ${allHistory.length}`);
       
-      embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
-      hasContent = true;
+      // Get distinct history for display
+      const recentHistory = database.getRecentWatchHistory(10);
+      
+      if (recentHistory && recentHistory.length > 0) {
+        const fieldValue = recentHistory.map(item => {
+          const mediaType = item.media_type || item.mediaType || 'Unknown';
+          const username = item.user || item.username || 'Unknown';
+          const date = item.watched_at ? new Date(item.watched_at).toLocaleDateString() : (item.date || 'Unknown date');
+          const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
+          return `${emoji} **${item.title}** - ${username} (${date})`;
+        }).join('\n');
+        
+        embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
+        hasContent = true;
+      } else if (allHistory && allHistory.length > 0) {
+        // Fallback to displaying all history if the distinct query didn't work
+        const fieldValue = allHistory.slice(0, 10).map(item => {
+          const mediaType = item.media_type || item.mediaType || 'Unknown';
+          const username = item.user || item.username || 'Unknown';
+          const date = item.watched_at ? new Date(item.watched_at).toLocaleDateString() : (item.date || 'Unknown date');
+          const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
+          return `${emoji} **${item.title}** - ${username} (${date})`;
+        }).join('\n');
+        
+        embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
+        hasContent = true;
+      } else {
+        embed.addFields({ name: '🔍 Recent Views', value: 'No recent views' });
+      }
+    } catch (error) {
+      console.error('Error getting recent history:', error);
     }
     
-    // Add recent downloads if available
-    if (recentDownloads && recentDownloads.length > 0) {
-      const fieldValue = recentDownloads.map(item => {
-        const mediaType = item.media_type || item.mediaType || 'Unknown';
-        const date = item.timestamp ? new Date(item.timestamp).toLocaleDateString() : (item.date || 'Unknown date');
-        const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '📁';
-        return `${emoji} **${item.title}** - ${item.quality || 'Unknown quality'} (${date})`;
-      }).join('\n');
+    // Add recent downloads
+    try {
+      // Increased limit to ensure we get more entries if available
+      const recentDownloads = database.getRecentDownloads(10);
+      console.log(`Dashboard displaying ${recentDownloads?.length || 0} recent download history items`);
       
-      embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue || 'No recent downloads' });
-      hasContent = true;
+      if (recentDownloads && recentDownloads.length > 0) {
+        const fieldValue = recentDownloads.map(item => {
+          const mediaType = item.media_type || item.mediaType || 'Unknown';
+          const date = item.timestamp ? new Date(item.timestamp).toLocaleDateString() : (item.date || 'Unknown date');
+          const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '📁';
+          return `${emoji} **${item.title}** - ${item.quality || 'Unknown quality'} (${date})`;
+        }).join('\n');
+        
+        embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue || 'No recent downloads' });
+        hasContent = true;
+      } else {
+        embed.addFields({ name: '⬇️ Recent Downloads', value: 'No recent downloads' });
+      }
+    } catch (error) {
+      console.error('Error getting recent downloads:', error);
     }
     
     if (!hasContent) {

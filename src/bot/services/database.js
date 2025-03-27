@@ -128,7 +128,8 @@ const addWatchHistoryStmt = db.prepare(`
 `);
 
 const getRecentWatchHistoryStmt = db.prepare(`
-  SELECT * FROM watch_history
+  SELECT DISTINCT user, title, media_type, platform, quality, watched_at, session_id
+  FROM watch_history
   ORDER BY watched_at DESC
   LIMIT ?
 `);
@@ -266,12 +267,21 @@ export function addDownloadHistory(eventType, source, mediaType, title, quality,
 }
 
 /**
- * Get recent downloads
+ * Get recent downloads with additional logging
  */
 export function getRecentDownloads(limit = 20) {
   try {
+    console.log(`Getting recent downloads with limit: ${limit}`);
     const downloads = getRecentDownloadsStmt.all(limit);
-    return downloads.map(download => {
+    console.log(`Found ${downloads.length} download history entries`);
+    
+    // Log total entries in the table for debugging
+    const countStmt = db.prepare('SELECT COUNT(*) as total FROM download_history');
+    const count = countStmt.get();
+    console.log(`Total entries in download_history table: ${count.total}`);
+    
+    // Parse JSON data in download entries
+    const result = downloads.map(download => {
       try {
         download.data = JSON.parse(download.data);
       } catch (e) {
@@ -279,6 +289,8 @@ export function getRecentDownloads(limit = 20) {
       }
       return download;
     });
+    
+    return result;
   } catch (error) {
     console.error('Error getting recent downloads:', error);
     return [];
@@ -299,13 +311,35 @@ export function addWatchHistory(user, title, mediaType, duration, platform, qual
 }
 
 /**
- * Get recent watch history
+ * Get recent watch history with additional logging
  */
 export function getRecentWatchHistory(limit = 20) {
   try {
-    return getRecentWatchHistoryStmt.all(limit);
+    console.log(`Getting recent watch history with limit: ${limit}`);
+    const result = getRecentWatchHistoryStmt.all(limit);
+    console.log(`Found ${result.length} watch history entries`);
+    
+    // Log total entries in the table for debugging
+    const countStmt = db.prepare('SELECT COUNT(*) as total FROM watch_history');
+    const count = countStmt.get();
+    console.log(`Total entries in watch_history table: ${count.total}`);
+    
+    return result;
   } catch (error) {
     console.error('Error getting recent watch history:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all watch history entries
+ */
+export function getAllWatchHistory() {
+  try {
+    const query = db.prepare('SELECT * FROM watch_history ORDER BY watched_at DESC');
+    return query.all();
+  } catch (error) {
+    console.error('Error retrieving all watch history:', error);
     return [];
   }
 }
