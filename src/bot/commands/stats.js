@@ -482,49 +482,61 @@ async function createDashboardEmbed() {
           }).join('\n');
         }
         
-        embed.addFields({ name: `⬇️ Current Downloads (${tvCount + movieCount})`, value: downloadField });
+        embed.addFields({ name: `⬇️ Downloads (${tvCount + movieCount})`, value: downloadField });
       } else {
         embed.addFields({ name: '⬇️ Current Downloads', value: 'No active downloads' });
       }
     } catch (error) {
-      embed.addFields({ name: '⬇️ Current Downloads', value: 'Failed to retrieve download information' });
+      embed.addFields({ name: '⬇️ Downloads', value: 'Failed to retrieve download information' });
     }
     
-    // Add recent history stats
+    // Add separator between current status and history
+    embed.addFields({ name: '\u200B', value: '━━━━━━━━━━━━━━━━━━━━━━━━' });
+    
+    // Add recent views
     try {
       const recentHistory = database.getRecentWatchHistory(5);
-      const recentDownloads = database.getRecentDownloads(5);
-      
-      let historyField = '';
-      
       if (recentHistory && recentHistory.length > 0) {
-        historyField += '**🕒 Recent Views**\n' + recentHistory.map(item => {
-          const emoji = item.media_type === 'movie' ? '🎬' : item.media_type === 'episode' ? '📺' : '🎵';
-          return `${emoji} ${item.title} (${item.user})`;
-        }).join('\n') + '\n\n';
-      } else {
-        historyField += '**🕒 Recent Views**\nNo recent views\n\n';
-      }
-      
-      if (recentDownloads && recentDownloads.length > 0) {
-        historyField += '**📥 Recent Downloads**\n' + recentDownloads.map(item => {
-          const emoji = item.media_type === 'movie' ? '🎬' : item.media_type === 'episode' ? '📺' : '📁';
-          return `${emoji} ${item.title} (${item.event_type})`;
+        const fieldValue = recentHistory.map(item => {
+          const mediaType = item.media_type || item.mediaType || 'Unknown';
+          const username = item.user || item.username || 'Unknown';
+          const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
+          return `${emoji} **${item.title}** (${username})`;
         }).join('\n');
+        
+        embed.addFields({ name: '🔍 Recent Views', value: fieldValue });
       } else {
-        historyField += '**📥 Recent Downloads**\nNo recent downloads';
+        embed.addFields({ name: '🔍 Recent Views', value: 'No recent views' });
       }
-      
-      embed.addFields({ name: '📚 Recent Activity', value: historyField });
     } catch (error) {
-      embed.addFields({ name: '📚 Recent Activity', value: 'Failed to retrieve recent activity' });
+      console.error('Error getting recent history:', error);
     }
+    
+    // Add recent downloads
+    try {
+      const recentDownloads = database.getRecentDownloads(5);
+      if (recentDownloads && recentDownloads.length > 0) {
+        const fieldValue = recentDownloads.map(item => {
+          const mediaType = item.media_type || item.mediaType || 'Unknown';
+          const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '📁';
+          return `${emoji} **${item.title}** - ${item.quality || 'Unknown'}`;
+        }).join('\n');
+        
+        embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue });
+      } else {
+        embed.addFields({ name: '⬇️ Recent Downloads', value: 'No recent downloads' });
+      }
+    } catch (error) {
+      console.error('Error getting recent downloads:', error);
+    }
+    
+    return embed;
   } catch (error) {
     console.error('Error creating dashboard embed:', error);
-    embed.setDescription('An error occurred while creating the dashboard. Check the logs for details.');
+    
+    embed.setDescription('Failed to create dashboard. Check the logs for details.');
+    return embed;
   }
-  
-  return embed;
 }
 
 /**
@@ -935,7 +947,7 @@ async function createHistoryEmbed() {
         // Handle different column names that might come from the database
         const username = stat.username || stat.user || 'Unknown';
         const count = stat.count || 0;
-        return `${username}: ${count} views`;
+        return `**${username}**: ${count} views`;
       }).join('\n');
       
       embed.addFields({ name: '👥 User Activity', value: fieldValue || 'No activity' });
@@ -951,11 +963,16 @@ async function createHistoryEmbed() {
         // Format media type display names (change 'track' to 'music')
         const displayMediaType = mediaType === 'track' ? 'music' : mediaType;
         const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${displayMediaType}: ${count} views`;
+        return `${emoji} **${displayMediaType}**: ${count} views`;
       }).join('\n');
       
       embed.addFields({ name: '📊 Media Types', value: fieldValue || 'No activity' });
       hasContent = true;
+    }
+    
+    // Add separator
+    if (hasContent) {
+      embed.addFields({ name: '\u200B', value: '━━━━━━━━━━━━━━━━━━━━━━━━' });
     }
     
     // Add recent views if available
@@ -965,7 +982,7 @@ async function createHistoryEmbed() {
         const username = item.user || item.username || 'Unknown';
         const date = item.watched_at ? new Date(item.watched_at).toLocaleDateString() : (item.date || 'Unknown date');
         const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${item.title} - ${username} (${date})`;
+        return `${emoji} **${item.title}** - ${username} (${date})`;
       }).join('\n');
       
       embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
@@ -978,7 +995,7 @@ async function createHistoryEmbed() {
         const mediaType = item.media_type || item.mediaType || 'Unknown';
         const date = item.timestamp ? new Date(item.timestamp).toLocaleDateString() : (item.date || 'Unknown date');
         const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '📁';
-        return `${emoji} ${item.title} - ${item.quality || 'Unknown quality'} (${date})`;
+        return `${emoji} **${item.title}** - ${item.quality || 'Unknown quality'} (${date})`;
       }).join('\n');
       
       embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue || 'No recent downloads' });
