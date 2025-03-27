@@ -100,7 +100,8 @@ export async function handleStats(message, args = []) {
         '`!stats stop` - Stop the dashboard\n' +
         '`!stats streams` - Show current streams\n' +
         '`!stats downloads` - Show current downloads\n' +
-        '`!stats history` - Show recent history'
+        '`!stats history` - Show recent history\n' +
+        '`!stats addsample` - Add sample history data'
       );
     }
     
@@ -119,6 +120,8 @@ export async function handleStats(message, args = []) {
         return await showDownloadStats(message);
       case 'history':
         return await showHistoryStats(message);
+      case 'addsample':
+        return await addSampleHistoryData(message);
       default:
         return await message.reply('Unknown subcommand. Use `!stats` to see available commands.');
     }
@@ -843,11 +846,19 @@ async function createHistoryEmbed() {
     const days = 7;
     const timeRange = `-${days} days`;
     
-    // Get stats from database
+    // Get stats from database with debug logging
+    console.log(`Getting watch history stats for the last ${days} days...`);
     const watchStats = database.getWatchStatsByUser(timeRange);
+    console.log('Watch stats by user:', watchStats);
+    
     const mediaTypeStats = database.getWatchStatsByMediaType(timeRange);
+    console.log('Media type stats:', mediaTypeStats);
+    
     const recentHistory = database.getRecentWatchHistory(10);
+    console.log('Recent watch history:', recentHistory);
+    
     const recentDownloads = database.getRecentDownloads(10);
+    console.log('Recent downloads:', recentDownloads);
     
     // Create the embed
     const embed = new EmbedBuilder()
@@ -861,7 +872,10 @@ async function createHistoryEmbed() {
     // Add user stats if available
     if (watchStats && watchStats.length > 0) {
       const fieldValue = watchStats.map(stat => {
-        return `${stat.username}: ${stat.count} views`;
+        // Handle different column names that might come from the database
+        const username = stat.username || stat.user || 'Unknown';
+        const count = stat.count || 0;
+        return `${username}: ${count} views`;
       }).join('\n');
       
       embed.addFields({ name: '👥 User Activity', value: fieldValue || 'No activity' });
@@ -871,8 +885,11 @@ async function createHistoryEmbed() {
     // Add media type stats if available
     if (mediaTypeStats && mediaTypeStats.length > 0) {
       const fieldValue = mediaTypeStats.map(stat => {
-        const emoji = stat.mediaType === 'movie' ? '🎬' : stat.mediaType === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${stat.mediaType}: ${stat.count} views`;
+        // Handle different column names that might come from the database
+        const mediaType = stat.mediaType || stat.media_type || 'Unknown';
+        const count = stat.count || 0;
+        const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
+        return `${emoji} ${mediaType}: ${count} views`;
       }).join('\n');
       
       embed.addFields({ name: '📊 Media Types', value: fieldValue || 'No activity' });
@@ -882,8 +899,11 @@ async function createHistoryEmbed() {
     // Add recent views if available
     if (recentHistory && recentHistory.length > 0) {
       const fieldValue = recentHistory.map(item => {
-        const emoji = item.media_type === 'movie' ? '🎬' : item.media_type === 'episode' ? '📺' : '🎵';
-        return `${emoji} ${item.title} - ${item.username} (${item.date})`;
+        const mediaType = item.media_type || item.mediaType || 'Unknown';
+        const username = item.user || item.username || 'Unknown';
+        const date = item.watched_at ? new Date(item.watched_at).toLocaleDateString() : (item.date || 'Unknown date');
+        const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '🎵';
+        return `${emoji} ${item.title} - ${username} (${date})`;
       }).join('\n');
       
       embed.addFields({ name: '🔍 Recent Views', value: fieldValue || 'No recent views' });
@@ -893,8 +913,10 @@ async function createHistoryEmbed() {
     // Add recent downloads if available
     if (recentDownloads && recentDownloads.length > 0) {
       const fieldValue = recentDownloads.map(item => {
-        const emoji = item.media_type === 'movie' ? '🎬' : item.media_type === 'episode' ? '📺' : '📁';
-        return `${emoji} ${item.title} - ${item.quality} (${item.date})`;
+        const mediaType = item.media_type || item.mediaType || 'Unknown';
+        const date = item.timestamp ? new Date(item.timestamp).toLocaleDateString() : (item.date || 'Unknown date');
+        const emoji = mediaType === 'movie' ? '🎬' : mediaType === 'episode' ? '📺' : '📁';
+        return `${emoji} ${item.title} - ${item.quality || 'Unknown quality'} (${date})`;
       }).join('\n');
       
       embed.addFields({ name: '⬇️ Recent Downloads', value: fieldValue || 'No recent downloads' });
@@ -902,7 +924,7 @@ async function createHistoryEmbed() {
     }
     
     if (!hasContent) {
-      embed.setDescription('No recent activity.');
+      embed.setDescription('No recent activity found. This could be because:\n1. No data has been recorded yet\n2. The database is not capturing events correctly\n\nTry using the bot more to generate data for the history.');
     }
     
     return embed;
@@ -916,6 +938,60 @@ async function createHistoryEmbed() {
       .setTimestamp();
     
     return embed;
+  }
+}
+
+/**
+ * Add sample history data to help test the history display
+ */
+async function addSampleHistoryData(message) {
+  try {
+    // Add some sample watch history data
+    database.addWatchHistory(
+      'SampleUser',
+      'SampleMovie',
+      'movie',
+      120,
+      'SamplePlayer',
+      '1080p',
+      'sample_session_id'
+    );
+    database.addWatchHistory(
+      'SampleUser',
+      'SampleEpisode',
+      'episode',
+      30,
+      'SamplePlayer',
+      '1080p',
+      'sample_session_id'
+    );
+    
+    // Add some sample download history data
+    database.addDownloadHistory(
+      'download',
+      'sonarr',
+      'episode',
+      'SampleEpisode',
+      '1080p',
+      '1.5 GB',
+      'completed',
+      JSON.stringify({ id: 'sample_download_id' })
+    );
+    database.addDownloadHistory(
+      'download',
+      'radarr',
+      'movie',
+      'SampleMovie',
+      '1080p',
+      '5 GB',
+      'completed',
+      JSON.stringify({ id: 'sample_download_id' })
+    );
+    
+    await message.reply('Sample history data added successfully!');
+  } catch (error) {
+    console.error('Error adding sample history data:', error);
+    await message.reply('Failed to add sample history data. Check the logs for details.');
   }
 }
 
