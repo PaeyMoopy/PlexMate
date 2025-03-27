@@ -163,6 +163,71 @@ async function showHelp(message) {
 }
 
 /**
+ * Create the streams embed
+ */
+async function createStreamsEmbed() {
+  try {
+    // Get current streams from Tautulli
+    const activity = await tautulliService.getActivity();
+    const streams = tautulliService.formatStreamData(activity);
+    
+    // Store completed or nearly completed streams in history
+    if (streams && streams.length > 0) {
+      streams.forEach(stream => {
+        // If progress is greater than 90%, consider it viewed for history
+        if (stream.progress > 90) {
+          // Check if this session has already been recorded to avoid duplicates
+          const existingRecord = database.checkWatchHistoryExists(stream.sessionId);
+          if (!existingRecord) {
+            console.log(`Recording history for nearly complete stream: ${stream.title}`);
+            database.addWatchHistory(
+              stream.user,
+              stream.title,
+              stream.mediaType,
+              stream.duration || 0,
+              stream.player || 'Unknown',
+              stream.quality || 'Unknown',
+              stream.sessionId
+            );
+          }
+        }
+      });
+    }
+    
+    // Create the embed
+    const embed = new EmbedBuilder()
+      .setTitle('📊 Current Streams')
+      .setColor(0x00BFFF)
+      .setFooter({ text: 'Updated' })
+      .setTimestamp();
+    
+    if (!streams || streams.length === 0) {
+      embed.setDescription('No active streams currently.');
+      return embed;
+    }
+    
+    // Add streams to the embed
+    const fieldValue = streams.map(stream => {
+      return `**${stream.user}** is ${stream.state} **${stream.title}**
+      🎞️ ${stream.quality} | ⏲️ ${stream.progress}% | 📱 ${stream.player} ${stream.isTranscoding ? '(⚙️ transcoding)' : ''}`;
+    }).join('\n\n');
+    
+    embed.setDescription(fieldValue);
+    return embed;
+  } catch (error) {
+    console.error('Error creating streams embed:', error);
+    const embed = new EmbedBuilder()
+      .setTitle('📊 Current Streams')
+      .setColor(0x00BFFF)
+      .setDescription('Failed to retrieve stream information. Check the logs for details.')
+      .setFooter({ text: 'Updated' })
+      .setTimestamp();
+    
+    return embed;
+  }
+}
+
+/**
  * Show current active streams stats
  */
 async function showStreamStats(message) {
@@ -644,71 +709,66 @@ async function refreshDashboard(message, scroll = false) {
 }
 
 /**
- * Create the streams embed
- */
-async function createStreamsEmbed() {
-  try {
-    // Check if this is an interaction and if we can send typing indicator
-    const activity = await tautulliService.getActivity();
-    const streamData = tautulliService.formatStreamData(activity);
-    
-    if (!streamData || streamData.length === 0) {
-      const embed = new EmbedBuilder()
-        .setTitle('📊 Current Streams')
-        .setColor(0x00BFFF)
-        .setDescription('No active streams at the moment.')
-        .setFooter({ text: 'Updated' })
-        .setTimestamp();
-      
-      return embed;
-    }
-    
-    // Create embed with stream information
-    const embed = new EmbedBuilder()
-      .setTitle(`📊 Current Streams (${streamData.length})`)
-      .setColor(0x00BFFF)
-      .setFooter({ text: 'Updated' })
-      .setTimestamp();
-    
-    // Add each stream as a field
-    streamData.forEach((stream, index) => {
-      const progressBar = createProgressBar(stream.progress);
-      const fieldValue = [
-        `${progressBar} (${stream.progress}%)`,
-        `${stream.quality} | ${stream.streamEmoji} ${stream.transcodeReason}`,
-        `Device: ${stream.device}`,
-        `Time Remaining: ${stream.timeRemaining}`
-      ].join('\n');
-      
-      embed.addFields({
-        name: `${stream.mediaTypeEmoji} ${stream.title} (${stream.user})`,
-        value: fieldValue
-      });
-    });
-    
-    return embed;
-  } catch (error) {
-    console.error('Error creating streams embed:', error);
-    const embed = new EmbedBuilder()
-      .setTitle('📊 Current Streams')
-      .setColor(0x00BFFF)
-      .setDescription('Failed to retrieve stream information. Check the logs for details.')
-      .setFooter({ text: 'Updated' })
-      .setTimestamp();
-    
-    return embed;
-  }
-}
-
-/**
  * Create the downloads embed
  */
 async function createDownloadsEmbed() {
   try {
-    // Try to get data from multiple sources
-    const sonarrQueue = await getSonarrQueue();
-    const radarrQueue = await getRadarrQueue();
+    // Fetch download data
+    const sonarrService = new ArrService('sonarr');
+    const radarrService = new ArrService('radarr');
+    
+    const sonarrQueue = await sonarrService.getQueue();
+    const radarrQueue = await radarrService.getQueue();
     const downloadClientData = await getDownloadClientData();
+    
+    // Record completed downloads for history
+    // Sonarr TV Shows
+    if (sonarrQueue && sonarrQueue.length > 0) {
+      sonarrQueue.forEach(item => {
+        // If download is complete or nearly complete (>95%), record it
+        if (item.progress > 95) {
+          // Check if this download has already been recorded
+          const existingRecord = database.checkDownloadHistoryExists('sonarr', item.title);
+          if (!existingRecord) {
+            console.log(`Recording history for completed TV download: ${item.title}`);
+            database.addDownloadHistory(
+              'download',
+              'sonarr',
+              'episode',
+              item.title,
+              item.quality || 'Unknown',
+              item.size ? formatBytes(item.size) : 'Unknown',
+              'completed',
+              JSON.stringify({ id: item.id })
+            );
+          }
+        }
+      });
+    }
+    
+    // Radarr Movies
+    if (radarrQueue && radarrQueue.length > 0) {
+      radarrQueue.forEach(item => {
+        // If download is complete or nearly complete (>95%), record it
+        if (item.progress > 95) {
+          // Check if this download has already been recorded
+          const existingRecord = database.checkDownloadHistoryExists('radarr', item.title);
+          if (!existingRecord) {
+            console.log(`Recording history for completed movie download: ${item.title}`);
+            database.addDownloadHistory(
+              'download',
+              'radarr',
+              'movie',
+              item.title,
+              item.quality || 'Unknown',
+              item.size ? formatBytes(item.size) : 'Unknown',
+              'completed',
+              JSON.stringify({ id: item.id })
+            );
+          }
+        }
+      });
+    }
     
     // Create the embed
     const embed = new EmbedBuilder()
@@ -722,7 +782,7 @@ async function createDownloadsEmbed() {
     // Add Sonarr data if available
     if (sonarrQueue && sonarrQueue.length > 0) {
       const fieldValue = sonarrQueue.map(item => {
-        return `- ${item.title} (${item.progress}%) - ${item.quality}`;
+        return `- ${item.title} (${item.progress}%)`;
       }).join('\n');
       
       embed.addFields({ name: '📺 TV Shows', value: fieldValue || 'No active downloads' });
@@ -732,7 +792,7 @@ async function createDownloadsEmbed() {
     // Add Radarr data if available
     if (radarrQueue && radarrQueue.length > 0) {
       const fieldValue = radarrQueue.map(item => {
-        return `- ${item.title} (${item.progress}%) - ${item.quality}`;
+        return `- ${item.title} (${item.progress}%)`;
       }).join('\n');
       
       embed.addFields({ name: '🎬 Movies', value: fieldValue || 'No active downloads' });
@@ -776,6 +836,22 @@ async function createDownloadsEmbed() {
     
     return embed;
   }
+}
+
+/**
+ * Format bytes to a human-readable format
+ */
+function formatBytes(bytes, decimals = 2) {
+  if (bytes === 0) return '0 Bytes';
+  if (!bytes) return 'Unknown';
+  
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
 /**

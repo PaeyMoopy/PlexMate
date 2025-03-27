@@ -413,3 +413,29 @@ export function getDashboardConfig() {
     return null;
   }
 }
+
+/**
+ * Check if a watch history entry already exists for a session ID
+ */
+export function checkWatchHistoryExists(sessionId) {
+  try {
+    const checkStmt = db.prepare('SELECT id FROM watch_history WHERE session_id = ?');
+    return checkStmt.get(sessionId);
+  } catch (error) {
+    console.error('Error checking watch history:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if a download history entry already exists for a source and title
+ */
+export function checkDownloadHistoryExists(source, title) {
+  try {
+    const checkStmt = db.prepare('SELECT id FROM download_history WHERE source = ? AND title = ? LIMIT 1');
+    return checkStmt.get(source, title);
+  } catch (error) {
+    console.error('Error checking download history:', error);
+    return null;
+  }
+}
