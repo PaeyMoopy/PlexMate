@@ -178,25 +178,35 @@ async function createStreamsEmbed() {
     // Store all streams in history - don't filter by progress
     if (streams && streams.length > 0) {
       streams.forEach(stream => {
-        // First check by session ID
-        const existingSessionRecord = database.checkWatchHistoryExists(stream.sessionId);
-        // Then fall back to checking by user and title if session ID check fails
-        const existingUserTitleRecord = !existingSessionRecord ? 
-          database.checkWatchHistoryExistsByUserAndTitle(stream.user, stream.title, stream.mediaType) : null;
-        
-        if (!existingSessionRecord && !existingUserTitleRecord) {
-          console.log(`Recording stream in history: ${stream.title} (${stream.progress}% complete)`);
-          database.addWatchHistory(
-            stream.user,
-            stream.title,
-            stream.mediaType,
-            stream.duration || 0,
-            stream.player || 'Unknown',
-            stream.quality || 'Unknown',
-            stream.sessionId
+        try {
+          // Check by user and title first (more reliable)
+          const existingUserTitleRecord = database.checkWatchHistoryExistsByUserAndTitle(
+            stream.user, 
+            stream.title, 
+            stream.mediaType
           );
-        } else {
-          console.log(`Skipping duplicate stream: ${stream.title} - Already in history`);
+          
+          // Then check by session ID as backup
+          const existingSessionRecord = database.checkWatchHistoryExists(stream.sessionId);
+          
+          console.log(`Stream check results for ${stream.title}: User/Title exists=${!!existingUserTitleRecord}, SessionID exists=${!!existingSessionRecord}`);
+          
+          if (!existingUserTitleRecord && !existingSessionRecord) {
+            console.log(`Recording stream in history: ${stream.title} (${stream.progress}% complete)`);
+            database.addWatchHistory(
+              stream.user,
+              stream.title,
+              stream.mediaType,
+              stream.duration || 0,
+              stream.player || 'Unknown',
+              stream.quality || 'Unknown',
+              stream.sessionId
+            );
+          } else {
+            console.log(`Skipping duplicate stream: ${stream.title} - Already in history`);
+          }
+        } catch (error) {
+          console.error(`Error processing stream ${stream.title}:`, error);
         }
       });
     }
@@ -391,25 +401,35 @@ async function createDashboardEmbed() {
       // Record streams to history during dashboard refresh
       if (streamData && streamData.length > 0) {
         streamData.forEach(stream => {
-          // First check by session ID
-          const existingSessionRecord = database.checkWatchHistoryExists(stream.sessionId);
-          // Then fall back to checking by user and title if session ID check fails
-          const existingUserTitleRecord = !existingSessionRecord ? 
-            database.checkWatchHistoryExistsByUserAndTitle(stream.user, stream.title, stream.mediaType) : null;
-          
-          if (!existingSessionRecord && !existingUserTitleRecord) {
-            console.log(`Dashboard refresh: Recording stream in history: ${stream.title}`);
-            database.addWatchHistory(
-              stream.user,
-              stream.title,
-              stream.mediaType,
-              stream.duration || 0,
-              stream.player || 'Unknown',
-              stream.quality || 'Unknown',
-              stream.sessionId
+          try {
+            // Check by user and title first (more reliable)
+            const existingUserTitleRecord = database.checkWatchHistoryExistsByUserAndTitle(
+              stream.user, 
+              stream.title, 
+              stream.mediaType
             );
-          } else {
-            console.log(`Skipping duplicate stream: ${stream.title} - Already in history`);
+            
+            // Then check by session ID as backup
+            const existingSessionRecord = database.checkWatchHistoryExists(stream.sessionId);
+            
+            console.log(`Stream check results for ${stream.title}: User/Title exists=${!!existingUserTitleRecord}, SessionID exists=${!!existingSessionRecord}`);
+            
+            if (!existingUserTitleRecord && !existingSessionRecord) {
+              console.log(`Dashboard refresh: Recording stream in history: ${stream.title}`);
+              database.addWatchHistory(
+                stream.user,
+                stream.title,
+                stream.mediaType,
+                stream.duration || 0,
+                stream.player || 'Unknown',
+                stream.quality || 'Unknown',
+                stream.sessionId
+              );
+            } else {
+              console.log(`Skipping duplicate stream: ${stream.title} - Already in history`);
+            }
+          } catch (error) {
+            console.error(`Error processing stream ${stream.title}:`, error);
           }
         });
       }
@@ -436,20 +456,28 @@ async function createDashboardEmbed() {
       // Sonarr TV Shows
       if (sonarrQueue && sonarrQueue.length > 0) {
         sonarrQueue.forEach(item => {
-          // Check if this download has already been recorded
-          const existingRecord = database.checkDownloadHistoryExists('sonarr', item.title);
-          if (!existingRecord) {
-            console.log(`Dashboard refresh: Recording TV download in history: ${item.title}`);
-            database.addDownloadHistory(
-              'download',
-              'sonarr',
-              'episode',
-              item.title,
-              item.quality || 'Unknown',
-              item.size ? formatBytes(item.size) : 'Unknown',
-              'download_in_progress',
-              JSON.stringify({ id: item.id })
-            );
+          try {
+            // Check if this download has already been recorded
+            const existingRecord = database.checkDownloadHistoryExists('sonarr', item.title);
+            console.log(`Download check for Sonarr item '${item.title}': exists=${!!existingRecord}`);
+            
+            if (!existingRecord) {
+              console.log(`Dashboard refresh: Recording TV download in history: ${item.title}`);
+              database.addDownloadHistory(
+                'download',
+                'sonarr',
+                'episode',
+                item.title,
+                item.quality || 'Unknown',
+                item.size ? formatBytes(item.size) : 'Unknown',
+                'download_in_progress',
+                JSON.stringify({ id: item.id })
+              );
+            } else {
+              console.log(`Skipping duplicate TV download: ${item.title} - Already in history`);
+            }
+          } catch (error) {
+            console.error(`Error processing download ${item.title}:`, error);
           }
         });
       }
@@ -457,20 +485,28 @@ async function createDashboardEmbed() {
       // Radarr Movies
       if (radarrQueue && radarrQueue.length > 0) {
         radarrQueue.forEach(item => {
-          // Check if this download has already been recorded
-          const existingRecord = database.checkDownloadHistoryExists('radarr', item.title);
-          if (!existingRecord) {
-            console.log(`Dashboard refresh: Recording movie download in history: ${item.title}`);
-            database.addDownloadHistory(
-              'download',
-              'radarr',
-              'movie',
-              item.title,
-              item.quality || 'Unknown',
-              item.size ? formatBytes(item.size) : 'Unknown',
-              'download_in_progress',
-              JSON.stringify({ id: item.id })
-            );
+          try {
+            // Check if this download has already been recorded
+            const existingRecord = database.checkDownloadHistoryExists('radarr', item.title);
+            console.log(`Download check for Radarr item '${item.title}': exists=${!!existingRecord}`);
+            
+            if (!existingRecord) {
+              console.log(`Dashboard refresh: Recording movie download in history: ${item.title}`);
+              database.addDownloadHistory(
+                'download',
+                'radarr',
+                'movie',
+                item.title,
+                item.quality || 'Unknown',
+                item.size ? formatBytes(item.size) : 'Unknown',
+                'download_in_progress',
+                JSON.stringify({ id: item.id })
+              );
+            } else {
+              console.log(`Skipping duplicate movie download: ${item.title} - Already in history`);
+            }
+          } catch (error) {
+            console.error(`Error processing download ${item.title}:`, error);
           }
         });
       }
@@ -815,20 +851,28 @@ async function createDownloadsEmbed() {
     // Sonarr TV Shows
     if (sonarrQueue && sonarrQueue.length > 0) {
       sonarrQueue.forEach(item => {
-        // Check if this download has already been recorded
-        const existingRecord = database.checkDownloadHistoryExists('sonarr', item.title);
-        if (!existingRecord) {
-          console.log(`Recording TV download in history: ${item.title} (${item.progress}% complete)`);
-          database.addDownloadHistory(
-            'download',
-            'sonarr',
-            'episode',
-            item.title,
-            item.quality || 'Unknown',
-            item.size ? formatBytes(item.size) : 'Unknown',
-            'download_in_progress',
-            JSON.stringify({ id: item.id })
-          );
+        try {
+          // Check if this download has already been recorded
+          const existingRecord = database.checkDownloadHistoryExists('sonarr', item.title);
+          console.log(`Download check for Sonarr item '${item.title}': exists=${!!existingRecord}`);
+          
+          if (!existingRecord) {
+            console.log(`Recording TV download in history: ${item.title} (${item.progress}% complete)`);
+            database.addDownloadHistory(
+              'download',
+              'sonarr',
+              'episode',
+              item.title,
+              item.quality || 'Unknown',
+              item.size ? formatBytes(item.size) : 'Unknown',
+              'download_in_progress',
+              JSON.stringify({ id: item.id })
+            );
+          } else {
+            console.log(`Skipping duplicate TV download: ${item.title} - Already in history`);
+          }
+        } catch (error) {
+          console.error(`Error processing download ${item.title}:`, error);
         }
       });
     }
@@ -836,20 +880,28 @@ async function createDownloadsEmbed() {
     // Radarr Movies
     if (radarrQueue && radarrQueue.length > 0) {
       radarrQueue.forEach(item => {
-        // Check if this download has already been recorded
-        const existingRecord = database.checkDownloadHistoryExists('radarr', item.title);
-        if (!existingRecord) {
-          console.log(`Recording movie download in history: ${item.title} (${item.progress}% complete)`);
-          database.addDownloadHistory(
-            'download',
-            'radarr',
-            'movie',
-            item.title,
-            item.quality || 'Unknown',
-            item.size ? formatBytes(item.size) : 'Unknown',
-            'download_in_progress',
-            JSON.stringify({ id: item.id })
-          );
+        try {
+          // Check if this download has already been recorded
+          const existingRecord = database.checkDownloadHistoryExists('radarr', item.title);
+          console.log(`Download check for Radarr item '${item.title}': exists=${!!existingRecord}`);
+          
+          if (!existingRecord) {
+            console.log(`Recording movie download in history: ${item.title} (${item.progress}% complete)`);
+            database.addDownloadHistory(
+              'download',
+              'radarr',
+              'movie',
+              item.title,
+              item.quality || 'Unknown',
+              item.size ? formatBytes(item.size) : 'Unknown',
+              'download_in_progress',
+              JSON.stringify({ id: item.id })
+            );
+          } else {
+            console.log(`Skipping duplicate movie download: ${item.title} - Already in history`);
+          }
+        } catch (error) {
+          console.error(`Error processing download ${item.title}:`, error);
         }
       });
     }
