@@ -420,9 +420,25 @@ export function getDashboardConfig() {
 export function checkWatchHistoryExists(sessionId) {
   try {
     const checkStmt = db.prepare('SELECT id FROM watch_history WHERE session_id = ?');
+    console.log(`Checking if watch history exists for session ID: ${sessionId}`);
     return checkStmt.get(sessionId);
   } catch (error) {
     console.error('Error checking watch history:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if a watch history entry already exists for user and title
+ * This is a backup method when session IDs are not reliable
+ */
+export function checkWatchHistoryExistsByUserAndTitle(user, title, mediaType) {
+  try {
+    const checkStmt = db.prepare('SELECT id FROM watch_history WHERE user = ? AND title = ? AND media_type = ? AND watched_at > datetime("now", "-1 hour") LIMIT 1');
+    console.log(`Checking if watch history exists for user: ${user}, title: ${title}, mediaType: ${mediaType}`);
+    return checkStmt.get(user, title, mediaType);
+  } catch (error) {
+    console.error('Error checking watch history by user and title:', error);
     return null;
   }
 }
@@ -432,7 +448,8 @@ export function checkWatchHistoryExists(sessionId) {
  */
 export function checkDownloadHistoryExists(source, title) {
   try {
-    const checkStmt = db.prepare('SELECT id FROM download_history WHERE source = ? AND title = ? LIMIT 1');
+    const checkStmt = db.prepare('SELECT id FROM download_history WHERE source = ? AND title = ? AND timestamp > datetime("now", "-1 hour") LIMIT 1');
+    console.log(`Checking if download history exists for source: ${source}, title: ${title}`);
     return checkStmt.get(source, title);
   } catch (error) {
     console.error('Error checking download history:', error);

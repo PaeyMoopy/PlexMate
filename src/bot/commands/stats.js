@@ -178,9 +178,13 @@ async function createStreamsEmbed() {
     // Store all streams in history - don't filter by progress
     if (streams && streams.length > 0) {
       streams.forEach(stream => {
-        // Check if this session has already been recorded to avoid duplicates
-        const existingRecord = database.checkWatchHistoryExists(stream.sessionId);
-        if (!existingRecord) {
+        // First check by session ID
+        const existingSessionRecord = database.checkWatchHistoryExists(stream.sessionId);
+        // Then fall back to checking by user and title if session ID check fails
+        const existingUserTitleRecord = !existingSessionRecord ? 
+          database.checkWatchHistoryExistsByUserAndTitle(stream.user, stream.title, stream.mediaType) : null;
+        
+        if (!existingSessionRecord && !existingUserTitleRecord) {
           console.log(`Recording stream in history: ${stream.title} (${stream.progress}% complete)`);
           database.addWatchHistory(
             stream.user,
@@ -191,6 +195,8 @@ async function createStreamsEmbed() {
             stream.quality || 'Unknown',
             stream.sessionId
           );
+        } else {
+          console.log(`Skipping duplicate stream: ${stream.title} - Already in history`);
         }
       });
     }
@@ -385,9 +391,13 @@ async function createDashboardEmbed() {
       // Record streams to history during dashboard refresh
       if (streamData && streamData.length > 0) {
         streamData.forEach(stream => {
-          // Check if this session has already been recorded to avoid duplicates
-          const existingRecord = database.checkWatchHistoryExists(stream.sessionId);
-          if (!existingRecord) {
+          // First check by session ID
+          const existingSessionRecord = database.checkWatchHistoryExists(stream.sessionId);
+          // Then fall back to checking by user and title if session ID check fails
+          const existingUserTitleRecord = !existingSessionRecord ? 
+            database.checkWatchHistoryExistsByUserAndTitle(stream.user, stream.title, stream.mediaType) : null;
+          
+          if (!existingSessionRecord && !existingUserTitleRecord) {
             console.log(`Dashboard refresh: Recording stream in history: ${stream.title}`);
             database.addWatchHistory(
               stream.user,
@@ -398,6 +408,8 @@ async function createDashboardEmbed() {
               stream.quality || 'Unknown',
               stream.sessionId
             );
+          } else {
+            console.log(`Skipping duplicate stream: ${stream.title} - Already in history`);
           }
         });
       }
