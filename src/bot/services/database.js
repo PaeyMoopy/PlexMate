@@ -298,6 +298,30 @@ export function getRecentDownloads(limit = 20) {
 }
 
 /**
+ * Get distinct downloads for display
+ */
+export function getDistinctRecentDownloads(limit = 10) {
+  try {
+    console.log(`Getting distinct recent downloads with limit: ${limit}`);
+    const stmt = db.prepare(`
+      SELECT DISTINCT title, media_type, quality, source, MAX(timestamp) as timestamp 
+      FROM download_history 
+      GROUP BY title 
+      ORDER BY timestamp DESC 
+      LIMIT ?
+    `);
+    
+    const downloads = stmt.all(limit);
+    console.log(`Found ${downloads.length} distinct download history entries`);
+    
+    return downloads;
+  } catch (error) {
+    console.error('Error getting distinct download history:', error);
+    return [];
+  }
+}
+
+/**
  * Add a watch event to history
  */
 export function addWatchHistory(user, title, mediaType, duration, platform, quality, sessionId) {
@@ -485,6 +509,38 @@ export function checkDownloadHistoryExists(source, title) {
     const checkStmt = db.prepare('SELECT id FROM download_history WHERE source = ? AND title = ? AND timestamp > datetime("now", "-1 hour") LIMIT 1');
     console.log(`Checking if download history exists for source: ${source}, title: ${title}`);
     return checkStmt.get(source, title);
+  } catch (error) {
+    console.error('Error checking download history:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if a watch history entry already exists for user and title within recent timeframe
+ */
+export function checkRecentWatchHistoryExists(user, title, mediaType, hoursWindow = 2) {
+  try {
+    const checkStmt = db.prepare(
+      'SELECT id FROM watch_history WHERE user = ? AND title = ? AND media_type = ? AND watched_at > datetime("now", ?) LIMIT 1'
+    );
+    const timeWindow = `-${hoursWindow} hours`;
+    console.log(`Checking if recent watch history exists for user: ${user}, title: ${title}, within ${hoursWindow} hours`);
+    return checkStmt.get(user, title, mediaType, timeWindow);
+  } catch (error) {
+    console.error('Error checking recent watch history:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if a download history entry already exists for a source and title within recent timeframe
+ */
+export function checkRecentDownloadHistoryExists(source, title, hoursWindow = 2) {
+  try {
+    const checkStmt = db.prepare('SELECT id FROM download_history WHERE source = ? AND title = ? AND timestamp > datetime("now", ?) LIMIT 1');
+    const timeWindow = `-${hoursWindow} hours`;
+    console.log(`Checking if download history exists for source: ${source}, title: ${title}, within ${hoursWindow} hours`);
+    return checkStmt.get(source, title, timeWindow);
   } catch (error) {
     console.error('Error checking download history:', error);
     return null;
