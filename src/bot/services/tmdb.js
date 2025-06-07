@@ -221,6 +221,57 @@ export async function getReleaseInfo(movieId) {
   }
 }
 
+/**
+ * Fetch media details from TMDB by ID and media type
+ * @param {string|number} mediaId - TMDB media ID
+ * @param {string} mediaType - Media type ('movie' or 'tv')
+ * @returns {Promise<Object>} Media details
+ */
+export async function searchTMDBById(mediaId, mediaType) {
+  try {
+    // Get API key at runtime
+    const TMDB_API_KEY = getApiKey();
+    if (!TMDB_API_KEY) {
+      throw new Error('TMDB API key is not configured');
+    }
+
+    // Input validation
+    if (!mediaId) {
+      throw new Error('Invalid media ID');
+    }
+    
+    if (!mediaType || (mediaType !== 'movie' && mediaType !== 'tv')) {
+      throw new Error('Invalid media type');
+    }
+
+    // Construct the API URL
+    const url = `${TMDB_BASE_URL}/${mediaType}/${mediaId}?api_key=${TMDB_API_KEY}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`TMDB API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    // Add media_type to match the format expected by our UI components
+    return {
+      ...data,
+      media_type: mediaType
+    };
+  } catch (error) {
+    console.error('Error fetching media details by ID:', error);
+    return null;
+  }
+}
+
 export async function checkOverseerr(tmdbId) {
   try {
     if (!tmdbId || typeof tmdbId !== 'number') {
