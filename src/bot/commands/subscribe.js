@@ -61,8 +61,7 @@ function createStatusEmbed(mediaItem, statusMessage, color = '#0099ff', isEpisod
 export async function handleSubscribe(message, query) {
   if (!query) {
     const embed = createStatusEmbed({}, 'Please provide a title to subscribe to!', '#ff0000');
-    const msg = await message.reply({ embeds: [embed] });
-    await safeDeleteMessage(msg, 'handleSubscribe: no query');
+    await message.reply({ embeds: [embed] });
     return;
   }
 
@@ -101,7 +100,7 @@ export async function handleSubscribe(message, query) {
     // Add instructions embed
     const instructionsEmbed = new EmbedBuilder()
       .setTitle('Search Results')
-      .setDescription(`Please select what you want to subscribe to${isEpisodeSubscription ? ' (Episode notifications)' : ''}:`);
+      .setDescription(`Please select what you want to subscribe to${isEpisodeSubscription ? ' (Episode notifications)' : ':'}`);
     
     embeds.unshift(instructionsEmbed);
 
@@ -199,7 +198,7 @@ export async function handleSubscribe(message, query) {
               max: 1 
             });
             
-            confirmCollector.on('collect', async (reaction, user) => {
+            confirmCollector.on('collect', async (reaction) => {
               // Delete the confirmation message to keep the chat clean
               await safeDeleteMessage(confirmMsg, 'confirmation decision made');
               
@@ -242,15 +241,17 @@ export async function handleSubscribe(message, query) {
             });
             
             confirmCollector.on('end', async (collected, reason) => {
-              if (reason !== 'selected') {
-                // Handle the case where user didn't react in time
+              // Only show timeout message if it actually timed out
+              if (reason === 'time') {
                 await message.reply('Subscription creation timed out. Please try again.');
                 // Delete the confirmation message if it wasn't already deleted
                 await safeDeleteMessage(confirmMsg, 'confirmation timeout');
               }
             });
             
-            collector.stop();
+            // Delete the search results message since we're showing a confirmation
+            await safeDeleteMessage(selectionMsg, 'showing confirmation');
+            collector.stop('selected');
             return;
           }
         }
@@ -312,15 +313,16 @@ export async function handleSubscribe(message, query) {
           
         await message.reply({ embeds: [errorEmbed] });
       }
-
-      collector.stop();
+      
+      // Stop collector after user makes a selection
+      collector.stop('selected');
     });
-
+    
     collector.on('end', async (_, reason) => {
-      // Only delete the message if it wasn't already deleted (in collect handler)
-      if (reason !== 'cancelled' && reason !== 'selected') {
+      // Only show timeout message if it actually timed out
+      if (reason === 'time') {
         await message.reply('Search results timed out. Please try again.');
-        // Delete the search results message on timeout to keep the chat clean
+        // Delete the search results message on timeout
         await safeDeleteMessage(selectionMsg, 'subscription timeout');
       }
     });
