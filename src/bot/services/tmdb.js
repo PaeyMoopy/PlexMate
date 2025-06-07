@@ -124,6 +124,103 @@ export async function searchTMDB(query, mediaType = null) {
   }
 }
 
+/**
+ * Check release dates and types for a movie from TMDB API
+ * @param {number} movieId - TMDB movie ID
+ * @returns {Promise<Object>} Release information including digital/physical release dates
+ */
+export async function getReleaseInfo(movieId) {
+  try {
+    // Get API key at runtime
+    const TMDB_API_KEY = getApiKey();
+    if (!TMDB_API_KEY) {
+      throw new Error('TMDB API key is not configured');
+    }
+
+    // Input validation
+    if (!movieId || isNaN(movieId)) {
+      throw new Error('Invalid movie ID');
+    }
+
+    const url = `${TMDB_BASE_URL}/movie/${movieId}/release_dates?api_key=${TMDB_API_KEY}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`TMDB API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    // Look for US releases first, then fall back to any country
+    let usReleases = data.results.find(country => country.iso_3166_1 === 'US');
+    
+    // If no US releases, try to find any country's releases
+    if (!usReleases || !usReleases.release_dates?.length) {
+      usReleases = data.results[0]; // Take the first country's releases
+    }
+
+    // No release dates found
+    if (!usReleases || !usReleases.release_dates?.length) {
+      return {
+        hasDigitalRelease: false,
+        hasPhysicalRelease: false,
+        hasTheatricalRelease: false,
+        releaseDates: {
+          digital: null,
+          physical: null,
+          theatrical: null
+        },
+        isReleased: false
+      };
+    }
+
+    // Parse release dates
+    const now = new Date();
+    const theatricalRelease = usReleases.release_dates.find(r => r.type === 3);
+    const digitalRelease = usReleases.release_dates.find(r => r.type === 4);
+    const physicalRelease = usReleases.release_dates.find(r => r.type === 5);
+
+    // Format response
+    const result = {
+      hasTheatricalRelease: !!theatricalRelease,
+      hasDigitalRelease: !!digitalRelease,
+      hasPhysicalRelease: !!physicalRelease,
+      releaseDates: {
+        theatrical: theatricalRelease ? new Date(theatricalRelease.release_date) : null,
+        digital: digitalRelease ? new Date(digitalRelease.release_date) : null,
+        physical: physicalRelease ? new Date(physicalRelease.release_date) : null
+      }
+    };
+
+    // Check if any release type is currently available
+    result.isDigitalReleased = result.hasDigitalRelease && result.releaseDates.digital && result.releaseDates.digital <= now;
+    result.isPhysicalReleased = result.hasPhysicalRelease && result.releaseDates.physical && result.releaseDates.physical <= now;
+    
+    // Digital or physical release available
+    result.isReleased = result.isDigitalReleased || result.isPhysicalReleased;
+    
+    // Format readable dates for display
+    if (result.releaseDates.digital) {
+      result.digitalReleaseDate = result.releaseDates.digital.toLocaleDateString();
+    }
+    if (result.releaseDates.physical) {
+      result.physicalReleaseDate = result.releaseDates.physical.toLocaleDateString();
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error checking TMDB release dates:', error);
+    return {
+      hasDigitalRelease: false,
+      hasPhysicalRelease: false,
+      hasTheatricalRelease: false,
+      releaseDates: {},
+      isReleased: false,
+      error: error.message
+    };
+  }
+}
+
 export async function checkOverseerr(tmdbId) {
   try {
     if (!tmdbId || typeof tmdbId !== 'number') {

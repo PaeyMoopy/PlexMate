@@ -31,17 +31,66 @@ export async function handleRequest(message, query) {
 
     // Create embeds for each result
     const embeds = options.map((result, index) => {
-      const { isAvailable } = availabilityChecks[index];
+      const availCheck = availabilityChecks[index];
+      const { isAvailable } = availCheck;
+      
+      // Start building the description
+      let description = `Release Date: ${result.release_date || result.first_air_date}\n` +
+                       `Overview: ${result.overview}`;
+      
+      // Add availability information based on detailed checks
+      if (isAvailable) {
+        description += '\n\n✅ Already available in Plex!';
+      } else if (result.media_type === 'movie' && availCheck.releaseStatus) {
+        // Handle movie-specific status information
+        if (availCheck.releaseStatus === 'not_released') {
+          // Not yet released for home viewing
+          description += '\n\n📅 Not yet released for home/digital viewing';
+          
+          // Add upcoming release dates if available
+          if (availCheck.upcomingDigitalRelease) {
+            description += `\n📱 Digital release expected: ${availCheck.upcomingDigitalRelease}`;
+          }
+          if (availCheck.upcomingPhysicalRelease) {
+            description += `\n💿 Physical release expected: ${availCheck.upcomingPhysicalRelease}`;
+          }
+        } else if (availCheck.releaseStatus === 'released_not_downloaded') {
+          // Released but not yet downloaded
+          description += '\n\n🔄 Released but not yet available in Plex';
+          
+          // Add release dates for reference
+          if (availCheck.digitalReleaseDate) {
+            description += `\n📱 Digital release: ${availCheck.digitalReleaseDate}`;
+          }
+        }
+        
+        // Add Radarr status if available
+        if (availCheck.radarrStatus?.configured && availCheck.radarrStatus?.exists) {
+          if (availCheck.radarrStatus.queueStatus === 'downloading') {
+            description += '\n\n⬇️ Currently downloading';
+          } else if (availCheck.radarrStatus.monitored) {
+            description += '\n\n🔍 Monitored - will be downloaded when available';
+          }
+        }
+      }
+      
+      // Generate the footer text
+      let footerText = `Type: ${result.media_type}`;
+      if (isAvailable) {
+        footerText += ' • Available in Plex';
+      } else if (result.media_type === 'movie' && availCheck.radarrStatus?.queueStatus === 'downloading') {
+        footerText += ' • Downloading';
+      } else if (result.media_type === 'movie' && availCheck.radarrStatus?.monitored) {
+        footerText += ' • Monitored';
+      }
       
       return new EmbedBuilder()
-        .setTitle(`${index + 1}. ${result.title || result.name}`)
-        .setDescription(
-          `Release Date: ${result.release_date || result.first_air_date}\n` +
-          `Overview: ${result.overview}\n` +
-          (isAvailable ? '✅ Already available in Plex!' : '')
-        )
-        .setImage(`https://image.tmdb.org/t/p/w500${result.poster_path}`)
-        .setFooter({ text: `Type: ${result.media_type}${isAvailable ? ' • Available in Plex' : ''}` });
+        .setColor(isAvailable ? '#00FF00' : '#0099ff')
+        .setTitle(`${result.title || result.name} ${getYear(result)}`.trim())
+        .setURL(getDetailUrl(result.media_type, result.id))
+        .setDescription(description)
+        .setThumbnail(getPosterUrl(result.poster_path))
+        .setFooter({ text: footerText });
     });
 
     // Add instructions embed

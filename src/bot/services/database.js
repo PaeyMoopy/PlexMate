@@ -67,16 +67,7 @@ db.exec(`
   )
 `);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS dashboard_config (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    message_id TEXT,
-    channel_id TEXT,
-    update_interval INTEGER DEFAULT 60000,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// Dashboard configuration table has been removed
 
 // Prepare statements for better performance
 const addSubscriptionStmt = db.prepare(`
@@ -169,24 +160,6 @@ const getActiveStreamsStmt = db.prepare(`
 const removeOldStreamsStmt = db.prepare(`
   DELETE FROM active_streams
   WHERE updated_at < datetime('now', '-10 minutes')
-`);
-
-// Prepare statements for dashboard config
-const upsertDashboardConfigStmt = db.prepare(`
-  INSERT INTO dashboard_config (
-    message_id, channel_id, update_interval, updated_at
-  ) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-  ON CONFLICT(id) DO UPDATE SET
-    message_id = excluded.message_id,
-    channel_id = excluded.channel_id,
-    update_interval = excluded.update_interval,
-    updated_at = excluded.updated_at
-`);
-
-const getDashboardConfigStmt = db.prepare(`
-  SELECT * FROM dashboard_config 
-  ORDER BY updated_at DESC 
-  LIMIT 1
 `);
 
 /**
@@ -432,44 +405,21 @@ export function cleanupOldStreams() {
 }
 
 /**
- * Update dashboard configuration
+ * Update dashboard configuration - stubbed function for compatibility
+ * This function is kept as a stub to prevent errors if it's called from elsewhere
  */
 export function updateDashboardConfig(config) {
-  try {
-    // Handle both object format and individual parameters for backward compatibility
-    if (typeof config === 'object') {
-      const messageId = config.message_id;
-      const channelId = config.channel_id;
-      const updateInterval = config.interval || 60000;
-      
-      console.log('Updating dashboard config with:', messageId, channelId, updateInterval);
-      upsertDashboardConfigStmt.run(messageId, channelId, updateInterval);
-    } else {
-      // For backward compatibility if called with separate parameters
-      const messageId = arguments[0];
-      const channelId = arguments[1];
-      const updateInterval = arguments[2] || 60000;
-      
-      console.log('Updating dashboard config (legacy) with:', messageId, channelId, updateInterval);
-      upsertDashboardConfigStmt.run(messageId, channelId, updateInterval);
-    }
-    return true;
-  } catch (error) {
-    console.error('Error updating dashboard config:', error);
-    return false;
-  }
+  console.log('Dashboard functionality has been removed');
+  return true;
 }
 
 /**
- * Get dashboard configuration
+ * Get dashboard configuration - stubbed function for compatibility
+ * This function is kept as a stub to prevent errors if it's called from elsewhere
  */
 export function getDashboardConfig() {
-  try {
-    return getDashboardConfigStmt.get();
-  } catch (error) {
-    console.error('Error getting dashboard config:', error);
-    return null;
-  }
+  console.log('Dashboard functionality has been removed');
+  return null;
 }
 
 /**

@@ -160,27 +160,89 @@ export async function getMediaDetails(mediaType, mediaId) {
   }
 }
 
+import { getReleaseInfo } from './tmdb.js';
+import arrService from './arr.js';
+
 export async function checkAvailability(mediaType, mediaId) {
   try {
     const details = await getMediaDetails(mediaType, mediaId);
+    let result = {
+      isAvailable: details.mediaInfo?.status === 5,
+      details,
+      notAvailableReason: null,
+      releaseStatus: null
+    };
     
-    // For TV shows, consider it available if Season 1 Episode 1 is available
+    // For TV shows, handle checking Season 1 Episode 1
     if (mediaType === 'tv') {
       const hasS1E1 = await checkIfS1E1Exists(details);
-      return {
-        isAvailable: hasS1E1 || details.mediaInfo?.status === 5,
-        details,
-        hasS1E1
-      };
+      result.hasS1E1 = hasS1E1;
+      result.isAvailable = hasS1E1 || details.mediaInfo?.status === 5;
+      
+      // No other checks needed for TV shows at this point
+      return result;
     }
     
-    return {
-      isAvailable: details.mediaInfo?.status === 5,
-      details
-    };
+    // For movies, check additional information
+    if (mediaType === 'movie') {
+      // Check if the movie has been downloaded in Radarr
+      const radarrStatus = await arrService.checkRadarrMovieStatus(mediaId);
+      result.radarrStatus = radarrStatus;
+      
+      // If Radarr is configured, check if the file has actually been downloaded
+      if (radarrStatus.configured) {
+        if (radarrStatus.exists && !radarrStatus.hasFile) {
+          // Movie is in Radarr but not downloaded
+          result.isAvailable = false;
+          result.notAvailableReason = 'in_radarr_not_downloaded';
+          
+          // Check if it's actively downloading
+          if (radarrStatus.queueStatus === 'downloading') {
+            result.notAvailableReason = 'currently_downloading';
+          }
+        }
+      }
+      
+      // Check TMDB for release date information
+      const releaseInfo = await getReleaseInfo(mediaId);
+      result.releaseInfo = releaseInfo;
+      
+      // If the movie is not available according to Overseerr/Radarr, check release status
+      if (!result.isAvailable) {
+        if (releaseInfo.isReleased) {
+          // Digital/physical release is available but not downloaded yet
+          result.releaseStatus = 'released_not_downloaded';
+          
+          if (releaseInfo.isDigitalReleased) {
+            result.digitalReleaseDate = releaseInfo.digitalReleaseDate;
+          }
+          
+          if (releaseInfo.isPhysicalReleased) {
+            result.physicalReleaseDate = releaseInfo.physicalReleaseDate;
+          }
+        } else {
+          // Not yet released digitally or physically
+          result.releaseStatus = 'not_released';
+          
+          // Include upcoming release dates if available
+          if (releaseInfo.hasDigitalRelease) {
+            result.upcomingDigitalRelease = releaseInfo.digitalReleaseDate;
+          }
+          
+          if (releaseInfo.hasPhysicalRelease) {
+            result.upcomingPhysicalRelease = releaseInfo.physicalReleaseDate;
+          }
+        }
+      }
+    }
+    
+    return result;
   } catch (error) {
     console.error('Error checking availability:', error);
-    throw error;
+    return {
+      isAvailable: false,
+      error: error.message
+    };
   }
 }
 

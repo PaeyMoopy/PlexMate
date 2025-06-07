@@ -354,6 +354,85 @@ class ArrService {
   }
   
   /**
+   * Check if a movie has been downloaded in Radarr
+   * @param {number} tmdbId - TMDB ID of the movie
+   * @returns {Promise<Object>} Movie download status information
+   */
+  async checkRadarrMovieStatus(tmdbId) {
+    try {
+      // Always get the latest configuration from environment variables
+      this.checkConfiguration();
+      
+      if (!this.radarrUrl || !this.radarrApiKey) {
+        console.log('Radarr not configured, cannot check movie status');
+        return { configured: false, status: 'unknown' };
+      }
+      
+      if (!tmdbId || isNaN(tmdbId)) {
+        throw new Error('Invalid TMDB ID');
+      }
+      
+      console.log(`Checking Radarr status for TMDB ID: ${tmdbId}`);
+      
+      // First check if the movie exists in Radarr
+      const movieResponse = await this.makeRequest('radarr', `movie/lookup/tmdb?tmdbId=${tmdbId}`);
+      
+      if (!movieResponse || !movieResponse.length) {
+        console.log(`Movie with TMDB ID ${tmdbId} not found in Radarr`);
+        return { configured: true, exists: false, status: 'not_found' };
+      }
+      
+      const movie = movieResponse[0];
+      
+      // Check if the movie is already added to Radarr
+      const movieId = movie.id;
+      let radarrMovie = null;
+      
+      try {
+        // This will error if the movie is not in Radarr's library
+        radarrMovie = await this.makeRequest('radarr', `movie/${movieId}`);
+      } catch (error) {
+        console.log(`Movie with ID ${movieId} not in Radarr library:`, error.message);
+        return { configured: true, exists: false, status: 'not_in_library' };
+      }
+      
+      if (!radarrMovie) {
+        return { configured: true, exists: false, status: 'not_in_library' };
+      }
+      
+      // Check if the movie has been downloaded by looking at hasFile property
+      const hasFile = radarrMovie.hasFile === true;
+      const monitored = radarrMovie.monitored === true;
+      
+      // Get queued downloads for this movie if it exists but doesn't have a file
+      let queueItems = [];
+      if (!hasFile && monitored) {
+        try {
+          const queue = await this.getRadarrQueue();
+          queueItems = queue.filter(item => item.movieId === movieId);
+        } catch (error) {
+          console.error('Error checking Radarr queue:', error);
+        }
+      }
+      
+      return {
+        configured: true,
+        exists: true,
+        monitored: monitored,
+        hasFile: hasFile,
+        status: hasFile ? 'downloaded' : (monitored ? 'monitored' : 'unmonitored'),
+        queueStatus: queueItems.length > 0 ? 'downloading' : 'not_downloading',
+        queueItems: queueItems,
+        title: movie.title,
+        year: movie.year
+      };
+    } catch (error) {
+      console.error('Error checking Radarr movie status:', error);
+      return { configured: true, error: error.message, status: 'error' };
+    }
+  }
+
+  /**
    * Process a webhook payload from Radarr or Sonarr
    * @param {Object} payload - Webhook payload
    * @returns {Object} Processed event data

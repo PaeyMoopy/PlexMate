@@ -5,7 +5,7 @@ import { handleList } from './commands/list.js';
 import { handleUnsubscribe } from './commands/unsubscribe.js';
 import { handleCommands } from './commands/commands.js';
 import { handleMapping } from './commands/mapping.js';
-import { handleStats, initStatsModule, createDashboardEmbed, createDashboardControls } from './commands/stats.js';
+import { handleStats, initStatsModule } from './commands/stats.js';
 import { checkForUpdates } from './commands/update.js';
 import { setupWebhookServer } from './webhooks/plex.js';
 import { startRequestChecking } from './services/overseerrRequests.js';
@@ -164,6 +164,7 @@ async function startBot() {
       startRequestChecking(); // Start checking for Overseerr requests
       
       // Initialize stats module for dashboard
+      // Initialize stats module (simplified version without dashboard)
       await initStatsModule(client);
 
       // Check for updates on startup (silent, just logs to console)
@@ -236,150 +237,7 @@ async function startBot() {
       }
     });
 
-    // Handle button interactions for stats dashboard
-    client.on(Events.InteractionCreate, async (interaction) => {
-      if (!interaction.isButton()) return;
-      
-      const { customId } = interaction;
-      
-      // Handle dashboard button clicks
-      if (customId.startsWith('dashboard_')) {
-        try {
-          // Defer reply to avoid interaction timeout
-          await interaction.deferReply();
-          
-          switch (customId) {
-            case 'dashboard_refresh':
-              // Get dashboard config
-              const dashboardConfig = database.getDashboardConfig();
-              if (!dashboardConfig) {
-                return await interaction.editReply('No active dashboard found.');
-              }
-              
-              // Refresh the dashboard directly
-              const dashboardChannel = client.channels.cache.get(dashboardConfig.channel_id);
-              if (!dashboardChannel) {
-                return await interaction.editReply('Dashboard channel not found.');
-              }
-              
-              try {
-                const dashboardMessage = await dashboardChannel.messages.fetch(dashboardConfig.message_id);
-                const embed = await createDashboardEmbed();
-                await dashboardMessage.edit({ 
-                  embeds: [embed], 
-                  components: createDashboardControls() 
-                });
-                
-                // Just acknowledge silently with a checkmark that will disappear
-                await interaction.editReply('✅');
-                setTimeout(() => {
-                  interaction.deleteReply().catch(err => {
-                    console.log('Could not delete refresh acknowledgment:', err.message);
-                  });
-                }, 2000);
-              } catch (err) {
-                console.error('Error refreshing dashboard:', err);
-                await interaction.editReply('Failed to refresh dashboard.');
-              }
-              break;
-              
-            case 'dashboard_scroll':
-              // Get dashboard config
-              const config = database.getDashboardConfig();
-              if (!config) {
-                return await interaction.editReply('No active dashboard found.');
-              }
-              
-              // Send a new dashboard to the bottom of the channel
-              const channel = client.channels.cache.get(config.channel_id);
-              if (!channel) {
-                return await interaction.editReply('Dashboard channel not found.');
-              }
-              
-              try {
-                // Create a new dashboard embed
-                const embed = await createDashboardEmbed();
-                
-                // Send a new dashboard message
-                const newDashboardMessage = await channel.send({
-                  embeds: [embed],
-                  components: createDashboardControls()
-                });
-                
-                // Update the dashboard config with the new message ID
-                database.updateDashboardConfig({
-                  message_id: newDashboardMessage.id,
-                  channel_id: channel.id,
-                  user_id: interaction.user.id,
-                  interval: config.interval,
-                  last_updated: Date.now()
-                });
-                
-                // Try to delete the old dashboard message
-                try {
-                  const oldMessage = await channel.messages.fetch(config.message_id);
-                  if (oldMessage) {
-                    await oldMessage.delete().catch(err => {
-                      console.log('Could not delete old dashboard message:', err.message);
-                    });
-                  }
-                } catch (err) {
-                  console.log('Could not fetch old dashboard message:', err.message);
-                }
-                
-                // Silent acknowledgment with auto-delete
-                await interaction.editReply('✅');
-                setTimeout(() => {
-                  interaction.deleteReply().catch(err => {
-                    console.log('Could not delete scroll acknowledgment:', err.message);
-                  });
-                }, 2000);
-              } catch (err) {
-                console.error('Error moving dashboard:', err);
-                await interaction.editReply('✅');
-                setTimeout(() => {
-                  interaction.deleteReply().catch(err => {
-                    console.log('Could not delete scroll acknowledgment:', err.message);
-                  });
-                }, 2000);
-              }
-              break;
-              
-            case 'dashboard_streams':
-              // Send a non-ephemeral reply so it can be deleted automatically
-              await interaction.editReply('Loading streams...');
-              
-              // Call the streams handler with the interaction
-              await handleStats(interaction, ['streams']);
-              break;
-              
-            case 'dashboard_downloads':
-              // Send a non-ephemeral reply so it can be deleted automatically
-              await interaction.editReply('Loading downloads...');
-              
-              // Call the downloads handler with the interaction
-              await handleStats(interaction, ['downloads']);
-              break;
-              
-            case 'dashboard_history':
-              // Send a non-ephemeral reply so it can be deleted automatically
-              await interaction.editReply('Loading history...');
-              
-              // Call the history handler with the interaction
-              await handleStats(interaction, ['history']);
-              break;
-              
-            default:
-              await interaction.editReply('Unknown button action.');
-              break;
-          }
-        } catch (error) {
-          console.error('Error handling dashboard button:', error);
-          await interaction.editReply('An error occurred while processing this action.')
-            .catch(console.error);
-        }
-      }
-    });
+    // Stats button interactions have been removed as part of dashboard removal
 
     // Initial login
     await client.login(process.env.DISCORD_TOKEN);
