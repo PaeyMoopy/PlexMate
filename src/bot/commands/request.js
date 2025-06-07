@@ -72,27 +72,29 @@ export async function handleRequest(message, query) {
         
         if (inRadarr) {
           // Category 2: Added to Radarr but not downloaded yet
-          description += '\n\n\n💾 Plex Availability: Being monitored but not available yet';
+          description += '\n\n\n💾 Plex Availability: On our watchlist';
           
           // Handle movies still in theaters vs digitally released
           if (!isOlderMovie && availCheck.releaseStatus === 'not_released') {
-            description += '\n🎬 Still in theaters - will be downloaded when digitally released';
+            description += '\n🎬 Currently only in theaters - will be added when it releases for home viewing';
           } else if (availCheck.radarrStatus.queueStatus === 'downloading') {
-            description += '\n⬇️ Currently downloading';
+            description += '\n⬇️ Currently downloading - will be available soon!';
           } else {
-            description += '\n🔍 Searching for a copy to download';
+            description += '\n🔍 Looking for a good quality copy to download';
           }
         } else {
           // Category 3: Not in Radarr/Sonarr yet
-          description += '\n\n\n💾 Plex Availability: Not yet requested';
+          description += '\n\n\n💾 Plex Availability: Not in our library yet';
+          description += '\n✴️ Click the reactions below to request this title';
         }
       } else if (result.media_type === 'tv') {
         if (!isAvailable) {
           // TV show not available
-          description += '\n\n\n💾 Plex Availability: Not available';
+          description += '\n\n\n💾 Plex Availability: Not in our library yet';
           if (availCheck.hasS1E1 === false) {
-            description += ' (Season 1 not found)';
+            description += '\nℹ️ Season 1 not currently available';
           }
+          description += '\n✴️ Click the reactions below to request this title';
         }
       }
       
@@ -101,17 +103,19 @@ export async function handleRequest(message, query) {
       
       // Match footer text to our simplified availability categories
       if (isAvailable) {
-        footerText += ' • Available in Plex';
+        footerText += ' • Available to watch now';
       } else if (result.media_type === 'movie' && availCheck.radarrStatus?.configured && availCheck.radarrStatus?.exists) {
         // Added to Radarr
         if (availCheck.radarrStatus.queueStatus === 'downloading') {
-          footerText += ' • Downloading';
+          footerText += ' • Downloading now';
+        } else if (!isOlderMovie && availCheck.releaseStatus === 'not_released') {
+          footerText += ' • Coming soon'; 
         } else {
-          footerText += ' • Monitored'; 
+          footerText += ' • On our watchlist'; 
         }
       } else {
         // Not requested yet
-        footerText += ' • Not requested';
+        footerText += ' • Not in library';
       }
       
       return new EmbedBuilder()
@@ -168,6 +172,26 @@ export async function handleRequest(message, query) {
           // Check if content is already available
           if (isAvailable) {
             await processingMsg.edit('This content is already available in Plex!');
+            return;
+          }
+          
+          // Check if the movie is already in Radarr 
+          if (selected.media_type === 'movie' && availabilityChecks[index].radarrStatus?.exists) {
+            // Already in Radarr but not downloaded yet
+            const status = availabilityChecks[index].radarrStatus;
+            const releaseStatus = availabilityChecks[index].releaseStatus;
+            
+            let message = 'This movie is already on our watchlist! ';
+            
+            if (status.queueStatus === 'downloading') {
+              message += 'It\'s currently downloading and will be available soon.';
+            } else if (releaseStatus === 'not_released') {
+              message += 'It\'s still only in theaters and will be added when it releases for home viewing.';
+            } else {
+              message += 'We\'re currently looking for a good quality copy to download.';
+            }
+            
+            await processingMsg.edit(message);
             return;
           }
 
