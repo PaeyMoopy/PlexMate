@@ -153,7 +153,9 @@ export async function handleRequest(message, query) {
     collector.on('collect', async (reaction, user) => {
       try {
         if (reaction.emoji.name === '❌') {
-          await message.reply('Request cancelled.');
+          const cancelMsg = await message.reply('Request cancelled.');
+          // Delete the search results message to keep the chat clean
+          await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
           collector.stop('cancelled');
           return;
         }
@@ -172,6 +174,8 @@ export async function handleRequest(message, query) {
           // Check if content is already available
           if (isAvailable) {
             await processingMsg.edit('This content is already available in Plex!');
+            // Delete the search results message to keep the chat clean
+            await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
             return;
           }
           
@@ -192,6 +196,8 @@ export async function handleRequest(message, query) {
             }
             
             await processingMsg.edit(message);
+            // Delete the search results message to keep the chat clean
+            await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
             return;
           }
 
@@ -208,6 +214,8 @@ export async function handleRequest(message, query) {
 
             if (requestableSeasons.length === 0) {
               await processingMsg.edit('All seasons are already available in Plex!');
+              // Delete the search results message to keep the chat clean
+              await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
               return;
             }
 
@@ -254,9 +262,14 @@ export async function handleRequest(message, query) {
           }
 
           await processingMsg.edit(`Request for "${selected.title || selected.name}" has been submitted! You'll be notified when it's available.`);
+          
+          // Delete the search results message to keep the chat clean
+          await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
         } catch (error) {
           console.error('Error processing request:', error);
           await processingMsg.edit('An error occurred while processing your request. Please try again later.');
+          // Delete the search results message to keep the chat clean
+          await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
         }
       } catch (error) {
         console.error('Error handling reaction:', error);
@@ -267,8 +280,14 @@ export async function handleRequest(message, query) {
     collector.on('end', async (_, reason) => {
       if (reason !== 'cancelled' && reason !== 'selected') {
         await message.reply('Request timed out. Please try again.');
+        // Delete the search results message on timeout to keep the chat clean
+        await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+      } else if (reason === 'selected') {
+        // For successful selections, we'll also delete the search message after processing is done
+        // The deletion happens after the response message is sent (see below)
+      } else {
+        // For cancellations, we already deleted the message in the collect handler
       }
-      await selectionMsg.reactions.removeAll().catch(console.error);
     });
 
   } catch (error) {
