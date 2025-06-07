@@ -58,58 +58,60 @@ export async function handleRequest(message, query) {
         description += `\n\n🎬 Theatrical Release: ${releaseDate}`;
       }
       
-      // Add availability information based on detailed checks
+      // Skip detailed release info for older movies (pre-2020)
+      const releaseYear = releaseDate ? parseInt(releaseDate.substring(0, 4), 10) : 0;
+      const isOlderMovie = releaseYear < 2020;
+      
+      // Add availability information based on simplified categories
       if (isAvailable) {
-        description += '\n\n✅ Already available in Plex!';
-      } else if (result.media_type === 'movie' && availCheck.releaseStatus) {
-        // Handle movie-specific status information
-        if (availCheck.releaseStatus === 'not_released') {
-          // Not yet released for home viewing
-          description += '\n\n⏳ Status: Not yet available for home/digital viewing';
-          
-          // Add upcoming release dates if available
-          if (availCheck.upcomingDigitalRelease) {
-            description += `\n📱 Digital release expected: ${availCheck.upcomingDigitalRelease}`;
-          }
-          if (availCheck.upcomingPhysicalRelease) {
-            description += `\n💿 Physical release expected: ${availCheck.upcomingPhysicalRelease}`;
-          }
-          
-          // Add clarifying note if only theatrical release exists but no digital date yet
-          if (!availCheck.upcomingDigitalRelease && !availCheck.upcomingPhysicalRelease) {
-            description += '\n⚠️ No digital/physical release date announced yet';
-          }
-        } else if (availCheck.releaseStatus === 'released_not_downloaded') {
-          // Released but not yet downloaded
-          description += '\n\n✅ Status: Released for home viewing but not in Plex yet';
-          
-          // Add release dates for reference
-          if (availCheck.digitalReleaseDate) {
-            description += `\n📱 Digital release date: ${availCheck.digitalReleaseDate}`;
-          }
-          if (availCheck.physicalReleaseDate) {
-            description += `\n💿 Physical release date: ${availCheck.physicalReleaseDate}`;
-          }
-        }
+        // Category 1: Fully available in Plex
+        description += '\n\n\n✅ Plex Availability: Available to watch now!';
+      } else if (result.media_type === 'movie') {
+        // Check if movie exists in Radarr
+        const inRadarr = availCheck.radarrStatus?.configured && availCheck.radarrStatus?.exists;
         
-        // Add Radarr status if available
-        if (availCheck.radarrStatus?.configured && availCheck.radarrStatus?.exists) {
-          if (availCheck.radarrStatus.queueStatus === 'downloading') {
-            description += '\n\n⬇️ Currently downloading';
-          } else if (availCheck.radarrStatus.monitored) {
-            description += '\n\n🔍 Monitored - will be downloaded when available';
+        if (inRadarr) {
+          // Category 2: Added to Radarr but not downloaded yet
+          description += '\n\n\n💾 Plex Availability: Being monitored but not available yet';
+          
+          // Handle movies still in theaters vs digitally released
+          if (!isOlderMovie && availCheck.releaseStatus === 'not_released') {
+            description += '\n🎬 Still in theaters - will be downloaded when digitally released';
+          } else if (availCheck.radarrStatus.queueStatus === 'downloading') {
+            description += '\n⬇️ Currently downloading';
+          } else {
+            description += '\n🔍 Searching for a copy to download';
+          }
+        } else {
+          // Category 3: Not in Radarr/Sonarr yet
+          description += '\n\n\n💾 Plex Availability: Not yet requested';
+        }
+      } else if (result.media_type === 'tv') {
+        if (!isAvailable) {
+          // TV show not available
+          description += '\n\n\n💾 Plex Availability: Not available';
+          if (availCheck.hasS1E1 === false) {
+            description += ' (Season 1 not found)';
           }
         }
       }
       
       // Generate the footer text
       let footerText = `Type: ${result.media_type}`;
+      
+      // Match footer text to our simplified availability categories
       if (isAvailable) {
         footerText += ' • Available in Plex';
-      } else if (result.media_type === 'movie' && availCheck.radarrStatus?.queueStatus === 'downloading') {
-        footerText += ' • Downloading';
-      } else if (result.media_type === 'movie' && availCheck.radarrStatus?.monitored) {
-        footerText += ' • Monitored';
+      } else if (result.media_type === 'movie' && availCheck.radarrStatus?.configured && availCheck.radarrStatus?.exists) {
+        // Added to Radarr
+        if (availCheck.radarrStatus.queueStatus === 'downloading') {
+          footerText += ' • Downloading';
+        } else {
+          footerText += ' • Monitored'; 
+        }
+      } else {
+        // Not requested yet
+        footerText += ' • Not requested';
       }
       
       return new EmbedBuilder()
