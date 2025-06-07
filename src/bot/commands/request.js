@@ -3,6 +3,21 @@ import { createRequest, checkAvailability } from '../services/overseerr.js';
 import { addSubscription } from '../services/database.js';
 import { EmbedBuilder } from 'discord.js';
 
+// Helper functions for displaying media information
+function getYear(result) {
+  if (!result) return '';
+  const date = result.release_date || result.first_air_date;
+  return date ? `(${date.substring(0, 4)})` : '';
+}
+
+function getDetailUrl(mediaType, id) {
+  return `https://www.themoviedb.org/${mediaType}/${id}`;
+}
+
+function getPosterUrl(posterPath) {
+  return posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : null;
+}
+
 export async function handleRequest(message, query) {
   if (!query) {
     await message.reply('Please provide a title to search for!');
