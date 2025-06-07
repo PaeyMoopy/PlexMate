@@ -2,6 +2,7 @@ import { searchTMDB } from '../services/tmdb.js';
 import { createRequest, checkAvailability } from '../services/overseerr.js';
 import { addSubscription } from '../services/database.js';
 import { EmbedBuilder } from 'discord.js';
+import { findSimilarTitles, popularTitles } from '../utils/stringUtils.js';
 
 /**
  * Safely delete a message with retry
@@ -85,8 +86,75 @@ export async function handleRequest(message, query) {
     const results = await searchTMDB(query);
     
     if (results.length === 0) {
-      await message.reply('No results found!');
-      return;
+      // Try to find similar titles using our string utility
+      const suggestions = findSimilarTitles(query, popularTitles, 0.6, 3);
+      
+      if (suggestions.length > 0) {
+        // Create an embed with suggestions
+        const suggestionsEmbed = new EmbedBuilder()
+          .setColor('#FFA500')
+          .setTitle('No results found')
+          .setDescription(
+            `I couldn't find any results for "${query}"\n\n` +
+            `**Did you mean:**\n${suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+          )
+          .setFooter({ text: 'React with a number to select a suggestion or ❌ to cancel' });
+          
+        const suggestionMsg = await message.reply({ embeds: [suggestionsEmbed] });
+        
+        // Add reaction options
+        for (let i = 0; i < suggestions.length; i++) {
+          await suggestionMsg.react(`${i + 1}️⃣`);
+        }
+        await suggestionMsg.react('❌');
+        
+        // Create reaction collector
+        const suggestionFilter = (reaction, user) => {
+          const validReactions = ['1️⃣', '2️⃣', '3️⃣', '❌'].slice(0, suggestions.length + 1);
+          return validReactions.includes(reaction.emoji.name) && user.id === message.author.id;
+        };
+        
+        const suggestionCollector = suggestionMsg.createReactionCollector({ 
+          filter: suggestionFilter, 
+          time: 30000,
+          max: 1
+        });
+        
+        suggestionCollector.on('collect', async (reaction) => {
+          // Handle suggestion selection
+          if (reaction.emoji.name === '❌') {
+            await safeDeleteMessage(suggestionMsg, 'suggestions cancelled');
+            await message.reply('Search cancelled.');
+            suggestionCollector.stop('cancelled');
+            return;
+          }
+          
+          // Get selected suggestion
+          const suggestionIndex = Number(reaction.emoji.name[0]) - 1;
+          const selectedSuggestion = suggestions[suggestionIndex];
+          
+          // Recursively call handleRequest with the suggested title
+          await safeDeleteMessage(suggestionMsg, 'suggestion selected');
+          await message.reply(`Searching for "${selectedSuggestion}" instead...`);
+          await handleRequest(message, selectedSuggestion);
+          
+          suggestionCollector.stop('selected');
+        });
+        
+        suggestionCollector.on('end', async (_, reason) => {
+          // Only show timeout message if it actually timed out
+          if (reason === 'time') {
+            await message.reply('Suggestion selection timed out. Please try again.');
+            // Delete the suggestion message on timeout
+            await safeDeleteMessage(suggestionMsg, 'suggestion timeout');
+          }
+        });
+        
+        return;
+      } else {
+        await message.reply('No results found!');
+        return;
+      }
     }
 
     // Take first N results based on settings
