@@ -374,30 +374,34 @@ class ArrService {
       
       console.log(`Checking Radarr status for TMDB ID: ${tmdbId}`);
       
-      // First check if the movie exists in Radarr
-      const movieResponse = await this.makeRequest('radarr', `movie/lookup/tmdb?tmdbId=${tmdbId}`);
+      // Get ALL movies from Radarr library
+      const allMovies = await this.makeRequest('radarr', 'movie');
+      console.log(`Found ${allMovies.length} movies in Radarr library`);
       
-      if (!movieResponse || !movieResponse.length) {
-        console.log(`Movie with TMDB ID ${tmdbId} not found in Radarr`);
-        return { configured: true, exists: false, status: 'not_found' };
-      }
-      
-      const movie = movieResponse[0];
-      
-      // Check if the movie is already added to Radarr
-      const movieId = movie.id;
-      let radarrMovie = null;
-      
-      try {
-        // This will error if the movie is not in Radarr's library
-        radarrMovie = await this.makeRequest('radarr', `movie/${movieId}`);
-      } catch (error) {
-        console.log(`Movie with ID ${movieId} not in Radarr library:`, error.message);
-        return { configured: true, exists: false, status: 'not_in_library' };
-      }
+      // Find the movie by TMDB ID in the library
+      const radarrMovie = allMovies.find(m => m.tmdbId === parseInt(tmdbId));
       
       if (!radarrMovie) {
-        return { configured: true, exists: false, status: 'not_in_library' };
+        console.log(`Movie with TMDB ID ${tmdbId} not found in Radarr library`);
+        
+        // Check if the movie exists in TMDB at least
+        try {
+          const movieResponse = await this.makeRequest('radarr', `movie/lookup/tmdb?tmdbId=${tmdbId}`);
+          if (movieResponse && movieResponse.length) {
+            // Movie exists in TMDB but not in Radarr
+            return { 
+              configured: true, 
+              exists: false, 
+              status: 'not_in_library',
+              title: movieResponse[0].title,
+              year: movieResponse[0].year
+            };
+          }
+        } catch (error) {
+          console.error('Error looking up movie in TMDB:', error.message);
+        }
+        
+        return { configured: true, exists: false, status: 'not_found' };
       }
       
       // Check if the movie has been downloaded by looking at hasFile property
@@ -409,7 +413,7 @@ class ArrService {
       if (!hasFile && monitored) {
         try {
           const queue = await this.getRadarrQueue();
-          queueItems = queue.filter(item => item.movieId === movieId);
+          queueItems = queue.filter(item => item.movieId === radarrMovie.id);
         } catch (error) {
           console.error('Error checking Radarr queue:', error);
         }
@@ -423,8 +427,8 @@ class ArrService {
         status: hasFile ? 'downloaded' : (monitored ? 'monitored' : 'unmonitored'),
         queueStatus: queueItems.length > 0 ? 'downloading' : 'not_downloading',
         queueItems: queueItems,
-        title: movie.title,
-        year: movie.year
+        title: radarrMovie.title,
+        year: radarrMovie.year
       };
     } catch (error) {
       console.error('Error checking Radarr movie status:', error);
