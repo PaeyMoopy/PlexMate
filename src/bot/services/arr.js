@@ -347,12 +347,83 @@ class ArrService {
   formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
     
+    const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
     
-    return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${sizes[i]}`;
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
   
+  /**
+   * Check if a TV show has been added to Sonarr
+   * @param {number} tvdbId - TVDB ID of the show
+   * @returns {Promise<Object>} Show status information
+   */
+  async checkSonarrShowStatus(tvdbId) {
+    try {
+      // Always get the latest configuration from environment variables
+      this.checkConfiguration();
+      
+      if (!this.sonarrUrl || !this.sonarrApiKey) {
+        console.log('Sonarr not configured, cannot check show status');
+        return { configured: false, status: 'unknown' };
+      }
+      
+      if (!tvdbId || isNaN(tvdbId)) {
+        throw new Error('Invalid TVDB ID');
+      }
+      
+      console.log(`Checking Sonarr status for TVDB ID: ${tvdbId}`);
+      
+      // Get ALL shows from Sonarr library
+      const allShows = await this.makeRequest('sonarr', 'series');
+      console.log(`Found ${allShows.length} shows in Sonarr library`);
+      
+      // Find the show by TVDB ID in the library
+      const sonarrShow = allShows.find(s => s.tvdbId === parseInt(tvdbId));
+      
+      if (!sonarrShow) {
+        console.log(`Show with TVDB ID ${tvdbId} not found in Sonarr library`);
+        return { configured: true, exists: false, status: 'not_in_library' };
+      }
+      
+      // Get statistics from the show
+      const hasAnyEpisodes = sonarrShow.statistics?.episodeFileCount > 0;
+      const monitored = sonarrShow.monitored === true;
+      const isUpcoming = sonarrShow.status === 'upcoming' || (new Date(sonarrShow.firstAired) > new Date());
+      const nextAiring = sonarrShow.nextAiring ? new Date(sonarrShow.nextAiring) : null;
+      
+      // Check seasons - get stats on which seasons have episodes
+      const seasons = sonarrShow.seasons || [];
+      const seasonStats = seasons.map(s => ({
+        seasonNumber: s.seasonNumber,
+        hasEpisodes: s.statistics?.episodeFileCount > 0,
+        episodeCount: s.statistics?.episodeFileCount || 0,
+        totalEpisodeCount: s.statistics?.totalEpisodeCount || 0,
+        percentComplete: s.statistics?.percentOfEpisodes || 0,
+        monitored: s.monitored
+      }));
+      
+      return {
+        configured: true,
+        exists: true,
+        monitored: monitored,
+        hasAnyEpisodes: hasAnyEpisodes,
+        status: hasAnyEpisodes ? 'has_episodes' : (monitored ? 'monitored' : 'unmonitored'),
+        isUpcoming: isUpcoming,
+        nextAiring: nextAiring,
+        title: sonarrShow.title,
+        year: sonarrShow.year,
+        seasonStats: seasonStats,
+        firstAired: sonarrShow.firstAired ? new Date(sonarrShow.firstAired) : null,
+        id: sonarrShow.id
+      };
+    } catch (error) {
+      console.error('Error checking Sonarr show status:', error);
+      return { configured: true, error: error.message, status: 'error' };
+    }
+  }
+
   /**
    * Check if a movie has been downloaded in Radarr
    * @param {number} tmdbId - TMDB ID of the movie

@@ -173,13 +173,43 @@ export async function checkAvailability(mediaType, mediaId) {
       releaseStatus: null
     };
     
-    // For TV shows, handle checking Season 1 Episode 1
+    // For TV shows, check Sonarr status and Season 1 Episode 1
     if (mediaType === 'tv') {
+      // Check if the show exists in Sonarr
+      const tvdbId = details.externalIds?.tvdbId;
+      if (tvdbId) {
+        const sonarrStatus = await arrService.checkSonarrShowStatus(tvdbId);
+        result.sonarrStatus = sonarrStatus;
+        
+        // Use Sonarr info to determine status
+        if (sonarrStatus.configured && sonarrStatus.exists) {
+          // Show is in Sonarr - check if any episodes exist
+          if (sonarrStatus.hasAnyEpisodes) {
+            result.isAvailable = true;
+          } else {
+            // Show is added to Sonarr but no episodes downloaded yet
+            result.isAvailable = false;
+            result.notAvailableReason = 'in_sonarr_not_downloaded';
+            
+            // Check if it's upcoming or already airing
+            if (sonarrStatus.isUpcoming) {
+              result.notAvailableReason = 'upcoming_release';
+              result.nextAiring = sonarrStatus.nextAiring;
+              result.firstAired = sonarrStatus.firstAired;
+            }
+          }
+        }
+      }
+      
+      // Still check Season 1 Episode 1 for backward compatibility
       const hasS1E1 = await checkIfS1E1Exists(details);
       result.hasS1E1 = hasS1E1;
-      result.isAvailable = hasS1E1 || details.mediaInfo?.status === 5;
       
-      // No other checks needed for TV shows at this point
+      // If we didn't already set isAvailable true based on Sonarr, use the S1E1 check
+      if (!result.isAvailable) {
+        result.isAvailable = hasS1E1 || details.mediaInfo?.status === 5;
+      }
+      
       return result;
     }
     

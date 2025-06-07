@@ -88,13 +88,48 @@ export async function handleRequest(message, query) {
           description += '\n✴️ Click the reactions below to request this title';
         }
       } else if (result.media_type === 'tv') {
-        if (!isAvailable) {
-          // TV show not available
-          description += '\n\n\n💾 Plex Availability: Not in our library yet';
-          if (availCheck.hasS1E1 === false) {
-            description += '\nℹ️ Season 1 not currently available';
+        if (isAvailable) {
+          // Fully available
+          description += '\n\n\n✅ Plex Availability: Available to watch now!';
+        } else {
+          // Check if show exists in Sonarr
+          const inSonarr = availCheck.sonarrStatus?.configured && availCheck.sonarrStatus?.exists;
+          
+          if (inSonarr) {
+            // TV show in Sonarr but not available yet
+            description += '\n\n\n💾 Plex Availability: On our watchlist';
+            
+            if (availCheck.sonarrStatus.isUpcoming) {
+              // Show hasn't premiered yet
+              const firstAired = availCheck.sonarrStatus.firstAired;
+              const nextAiring = availCheck.sonarrStatus.nextAiring;
+              
+              if (firstAired) {
+                const firstAiredDate = new Date(firstAired).toLocaleDateString();
+                description += `\n🍿 Show premieres on ${firstAiredDate}`;
+              } else if (nextAiring) {
+                const nextAiringDate = new Date(nextAiring).toLocaleDateString();
+                description += `\n📅 Next episode airs on ${nextAiringDate}`;
+              } else {
+                description += '\n🍿 This show hasn\'t premiered yet';
+              }
+            } else {
+              // Show is airing but we don't have episodes yet
+              description += '\n🔎 Looking for episodes to download';
+            }
+            
+            // Check if Season 1 is specifically missing
+            if (availCheck.hasS1E1 === false) {
+              description += '\nℹ️ Season 1 not currently available';
+            }
+          } else {
+            // Not in Sonarr at all
+            description += '\n\n\n💾 Plex Availability: Not in our library yet';
+            if (availCheck.hasS1E1 === false) {
+              description += '\nℹ️ Season 1 not currently available';
+            }
+            description += '\n✴️ Click the reactions below to request this title';
           }
-          description += '\n✴️ Click the reactions below to request this title';
         }
       }
       
@@ -112,6 +147,13 @@ export async function handleRequest(message, query) {
           footerText += ' • Coming soon'; 
         } else {
           footerText += ' • On our watchlist'; 
+        }
+      } else if (result.media_type === 'tv' && availCheck.sonarrStatus?.configured && availCheck.sonarrStatus?.exists) {
+        // Added to Sonarr
+        if (availCheck.sonarrStatus.isUpcoming) {
+          footerText += ' • Coming soon';
+        } else {
+          footerText += ' • On our watchlist';
         }
       } else {
         // Not requested yet
@@ -201,8 +243,33 @@ export async function handleRequest(message, query) {
             return;
           }
 
-          // For TV shows, check which seasons are available
+          // For TV shows, check which seasons are available and if show is already in Sonarr
           if (selected.media_type === 'tv' && details.seasons?.length > 0) {
+            // Check if TV show is already in Sonarr
+            if (availabilityChecks[index].sonarrStatus?.exists) {
+              // Already in Sonarr but not downloaded yet
+              const status = availabilityChecks[index].sonarrStatus;
+              
+              let message = 'This TV show is already on our watchlist! ';
+              
+              if (status.isUpcoming) {
+                const firstAiredDate = status.firstAired ? 
+                  new Date(status.firstAired).toLocaleDateString() : 'an upcoming date';
+                message += `It hasn't premiered yet and is scheduled to release on ${firstAiredDate}.`;
+              } else if (status.nextAiring) {
+                const nextAiringDate = new Date(status.nextAiring).toLocaleDateString();
+                message += `The next episode is scheduled to air on ${nextAiringDate}.`;
+              } else {
+                message += 'We\'re currently looking for episodes to download.';
+              }
+              
+              await processingMsg.edit(message);
+              // Delete the search results message to keep the chat clean
+              await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+              return;
+            }
+            
+            // Check available seasons for shows not already in Sonarr
             const availableSeasons = new Set(
               details.mediaInfo?.seasons?.map(s => s.seasonNumber) || []
             );
