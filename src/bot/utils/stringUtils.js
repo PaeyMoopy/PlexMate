@@ -228,7 +228,8 @@ export const defaultPopularTitles = [
 
 // This will store our dynamically fetched titles
 let dynamicPopularTitles = [...defaultPopularTitles];
-let lastFetchTime = 0;
+let lastFetchTime = 0; // Initialize to 0 to ensure first-run update
+let isFirstRun = true; // Flag to guarantee title update on first run
 const FETCH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 /**
@@ -238,8 +239,8 @@ const FETCH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 export async function getPopularTitles() {
   const currentTime = Date.now();
   
-  // Check if we should refresh the titles (once per day)
-  if (currentTime - lastFetchTime > FETCH_INTERVAL) {
+  // Check if this is the first run or if refresh interval has passed
+  if (isFirstRun || (currentTime - lastFetchTime > FETCH_INTERVAL)) {
     try {
       // Log with timestamp and clear formatting for visibility
       const timestamp = new Date().toISOString();
@@ -261,6 +262,13 @@ export async function getPopularTitles() {
         console.log(`   - Total titles: ${dynamicPopularTitles.length}`);
         console.log(`   - New titles added: ${newTitlesCount}`);
         console.log(`   - Next update: ${new Date(currentTime + FETCH_INTERVAL).toLocaleString()}`);
+        
+        // Mark first run complete
+        if (isFirstRun) {
+          console.log(`   - First run initialization complete.`);
+          isFirstRun = false;
+        }
+        
         console.log('==================================================\n');
       } else {
         console.log(`[${timestamp}] ⚠️  No titles fetched from TMDB. Using existing database.`);
