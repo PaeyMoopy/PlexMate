@@ -50,8 +50,13 @@ export async function handleRequest(message, query) {
       const { isAvailable } = availCheck;
       
       // Start building the description
-      let description = `Release Date: ${result.release_date || result.first_air_date}\n` +
-                       `Overview: ${result.overview}`;
+      let description = `Overview: ${result.overview}`;
+      
+      // Add theatrical release date info
+      const releaseDate = result.release_date || result.first_air_date;
+      if (releaseDate) {
+        description += `\n\n🎬 Theatrical Release: ${releaseDate}`;
+      }
       
       // Add availability information based on detailed checks
       if (isAvailable) {
@@ -60,7 +65,7 @@ export async function handleRequest(message, query) {
         // Handle movie-specific status information
         if (availCheck.releaseStatus === 'not_released') {
           // Not yet released for home viewing
-          description += '\n\n📅 Not yet released for home/digital viewing';
+          description += '\n\n⏳ Status: Not yet available for home/digital viewing';
           
           // Add upcoming release dates if available
           if (availCheck.upcomingDigitalRelease) {
@@ -69,13 +74,21 @@ export async function handleRequest(message, query) {
           if (availCheck.upcomingPhysicalRelease) {
             description += `\n💿 Physical release expected: ${availCheck.upcomingPhysicalRelease}`;
           }
+          
+          // Add clarifying note if only theatrical release exists but no digital date yet
+          if (!availCheck.upcomingDigitalRelease && !availCheck.upcomingPhysicalRelease) {
+            description += '\n⚠️ No digital/physical release date announced yet';
+          }
         } else if (availCheck.releaseStatus === 'released_not_downloaded') {
           // Released but not yet downloaded
-          description += '\n\n🔄 Released but not yet available in Plex';
+          description += '\n\n✅ Status: Released for home viewing but not in Plex yet';
           
           // Add release dates for reference
           if (availCheck.digitalReleaseDate) {
-            description += `\n📱 Digital release: ${availCheck.digitalReleaseDate}`;
+            description += `\n📱 Digital release date: ${availCheck.digitalReleaseDate}`;
+          }
+          if (availCheck.physicalReleaseDate) {
+            description += `\n💿 Physical release date: ${availCheck.physicalReleaseDate}`;
           }
         }
         
