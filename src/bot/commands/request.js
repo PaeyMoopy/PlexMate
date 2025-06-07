@@ -19,6 +19,27 @@ async function safeDeleteMessage(msg, context) {
   }
 }
 
+/**
+ * Create a rich embed response with media details
+ * @param {Object} mediaItem - The media item data
+ * @param {string} statusMessage - Status message to display
+ * @param {string} color - Color for the embed (hex code)
+ * @returns {EmbedBuilder} Discord.js embed
+ */
+function createStatusEmbed(mediaItem, statusMessage, color = '#0099ff') {
+  const title = mediaItem.title || mediaItem.name;
+  const year = getYear(mediaItem);
+  const fullTitle = `${title} ${year}`.trim();
+  
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(fullTitle)
+    .setURL(getDetailUrl(mediaItem.media_type, mediaItem.id))
+    .setDescription(statusMessage)
+    .setThumbnail(getPosterUrl(mediaItem.poster_path))
+    .setFooter({ text: `Type: ${mediaItem.media_type}` });
+}
+
 // Helper functions for displaying media information
 function getYear(result) {
   if (!result) return '';
@@ -211,6 +232,7 @@ export async function handleRequest(message, query) {
     collector.on('collect', async (reaction, user) => {
       try {
         if (reaction.emoji.name === '❌') {
+          // Simple cancel message since we don't have a selection yet
           const cancelMsg = await message.reply('Request cancelled.');
           // Delete the search results message to keep the chat clean
           await safeDeleteMessage(selectionMsg, 'cancel button');
@@ -231,7 +253,12 @@ export async function handleRequest(message, query) {
         try {
           // Check if content is already available
           if (isAvailable) {
-            await processingMsg.edit('This content is already available in Plex!');
+            const embed = createStatusEmbed(
+              selected,
+              `✅ ${selected.title || selected.name} is already available in Plex!`,
+              '#00FF00' // Green for available content
+            );
+            await processingMsg.edit({ content: '', embeds: [embed] });
             // Delete the search results message to keep the chat clean
             await safeDeleteMessage(selectionMsg, 'already available');
             return;
@@ -243,17 +270,23 @@ export async function handleRequest(message, query) {
             const status = availabilityChecks[index].radarrStatus;
             const releaseStatus = availabilityChecks[index].releaseStatus;
             
-            let message = 'This movie is already on our watchlist! ';
+            let message = `💾 ${selected.title || selected.name} is already on our watchlist!`;
             
             if (status.queueStatus === 'downloading') {
-              message += 'It\'s currently downloading and will be available soon.';
+              message += '\n⬇️ It\'s currently downloading and will be available soon.';
             } else if (releaseStatus === 'not_released') {
-              message += 'It\'s still only in theaters and will be added when it releases for home viewing.';
+              message += '\n🎬 It\'s still only in theaters and will be added when it releases for home viewing.';
             } else {
-              message += 'We\'re currently looking for a good quality copy to download.';
+              message += '\n🔎 We\'re currently looking for a good quality copy to download.';
             }
             
-            await processingMsg.edit(message);
+            const embed = createStatusEmbed(
+              selected,
+              message,
+              '#FFA500' // Orange for watchlist content
+            );
+            
+            await processingMsg.edit({ content: '', embeds: [embed] });
             // Delete the search results message to keep the chat clean
             await safeDeleteMessage(selectionMsg, 'movie on watchlist');
             return;
@@ -266,20 +299,26 @@ export async function handleRequest(message, query) {
               // Already in Sonarr but not downloaded yet
               const status = availabilityChecks[index].sonarrStatus;
               
-              let message = 'This TV show is already on our watchlist! ';
+              let message = `💾 ${selected.title || selected.name} is already on our watchlist!`;
               
               if (status.isUpcoming) {
                 const firstAiredDate = status.firstAired ? 
                   new Date(status.firstAired).toLocaleDateString() : 'an upcoming date';
-                message += `It hasn't premiered yet and is scheduled to release on ${firstAiredDate}.`;
+                message += `\n📅 It hasn't premiered yet and is scheduled to release on ${firstAiredDate}.`;
               } else if (status.nextAiring) {
                 const nextAiringDate = new Date(status.nextAiring).toLocaleDateString();
-                message += `The next episode is scheduled to air on ${nextAiringDate}.`;
+                message += `\n📅 The next episode is scheduled to air on ${nextAiringDate}.`;
               } else {
-                message += 'We\'re currently looking for episodes to download.';
+                message += '\n🔎 We\'re currently looking for episodes to download.';
               }
               
-              await processingMsg.edit(message);
+              const embed = createStatusEmbed(
+                selected,
+                message,
+                '#FFA500' // Orange for watchlist content
+              );
+              
+              await processingMsg.edit({ content: '', embeds: [embed] });
               // Delete the search results message to keep the chat clean
               await safeDeleteMessage(selectionMsg, 'tv show on watchlist');
               return;
@@ -296,7 +335,12 @@ export async function handleRequest(message, query) {
               .map(season => season.seasonNumber);
 
             if (requestableSeasons.length === 0) {
-              await processingMsg.edit('All seasons are already available in Plex!');
+              const embed = createStatusEmbed(
+                selected,
+                `✅ All seasons of ${selected.title || selected.name} are already available in Plex!`,
+                '#00FF00' // Green for available content
+              );
+              await processingMsg.edit({ content: '', embeds: [embed] });
               // Delete the search results message to keep the chat clean
               await safeDeleteMessage(selectionMsg, 'all seasons available');
               return;
@@ -344,13 +388,28 @@ export async function handleRequest(message, query) {
             throw new Error('Failed to add subscription');
           }
 
-          await processingMsg.edit(`Request for "${selected.title || selected.name}" has been submitted! You'll be notified when it's available.`);
+          const embed = createStatusEmbed(
+            selected,
+            `✳️ Request for ${selected.title || selected.name} has been submitted!
+
+You'll be notified when it's available.`,
+            '#0099ff' // Blue for success
+          );
+          await processingMsg.edit({ content: '', embeds: [embed] });
           
           // Delete the search results message to keep the chat clean
           await safeDeleteMessage(selectionMsg, 'request submitted');
+          
         } catch (error) {
           console.error('Error processing request:', error);
-          await processingMsg.edit('An error occurred while processing your request. Please try again later.');
+          const errorEmbed = createStatusEmbed(
+            selected,
+            `❌ Error processing request for ${selected.title || selected.name}.
+
+Please try again later.`,
+            '#FF0000' // Red for errors
+          );
+          await processingMsg.edit({ content: '', embeds: [errorEmbed] });
           // Delete the search results message to keep the chat clean
           await safeDeleteMessage(selectionMsg, 'error processing');
         }
@@ -362,7 +421,8 @@ export async function handleRequest(message, query) {
 
     collector.on('end', async (_, reason) => {
       if (reason !== 'cancelled' && reason !== 'selected') {
-        await message.reply('Request timed out. Please try again.');
+        // Simple timeout message - we don't have a specific selection to show
+        await message.reply('Search results timed out. Please try again.');
         // Delete the search results message on timeout to keep the chat clean
         await safeDeleteMessage(selectionMsg, 'request timeout');
       } else if (reason === 'selected') {
