@@ -9,13 +9,29 @@ import { EmbedBuilder } from 'discord.js';
  * @param {string} context - Context for logging
  */
 async function safeDeleteMessage(msg, context) {
+  if (!msg || !msg.id) {
+    console.log(`Skipping message deletion in context ${context}: Message reference invalid or null`);
+    return;
+  }
+
   try {
+    // Check if we still have the message in Discord's cache
+    // If not, it might have been deleted already
+    if (!msg.channel.messages.cache.has(msg.id)) {
+      console.log(`Message already deleted or not in cache (context: ${context})`);
+      return;
+    }
+
     // Add a slight delay before deletion to ensure Discord API is ready
     await new Promise(resolve => setTimeout(resolve, 1000));
     await msg.delete();
     console.log(`Successfully deleted message in context: ${context}`);
   } catch (error) {
-    console.error(`Failed to delete message in context ${context}:`, error);
+    if (error.code === 10008) { // Unknown Message error
+      console.log(`Message was already deleted (context: ${context})`);
+    } else {
+      console.error(`Failed to delete message in context ${context}:`, error);
+    }
   }
 }
 
