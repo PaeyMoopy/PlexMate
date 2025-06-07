@@ -3,6 +3,22 @@ import { createRequest, checkAvailability } from '../services/overseerr.js';
 import { addSubscription } from '../services/database.js';
 import { EmbedBuilder } from 'discord.js';
 
+/**
+ * Safely delete a message with retry
+ * @param {Object} msg - The Discord.js message to delete
+ * @param {string} context - Context for logging
+ */
+async function safeDeleteMessage(msg, context) {
+  try {
+    // Add a slight delay before deletion to ensure Discord API is ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await msg.delete();
+    console.log(`Successfully deleted message in context: ${context}`);
+  } catch (error) {
+    console.error(`Failed to delete message in context ${context}:`, error);
+  }
+}
+
 // Helper functions for displaying media information
 function getYear(result) {
   if (!result) return '';
@@ -197,7 +213,7 @@ export async function handleRequest(message, query) {
         if (reaction.emoji.name === '❌') {
           const cancelMsg = await message.reply('Request cancelled.');
           // Delete the search results message to keep the chat clean
-          await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+          await safeDeleteMessage(selectionMsg, 'cancel button');
           collector.stop('cancelled');
           return;
         }
@@ -217,7 +233,7 @@ export async function handleRequest(message, query) {
           if (isAvailable) {
             await processingMsg.edit('This content is already available in Plex!');
             // Delete the search results message to keep the chat clean
-            await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+            await safeDeleteMessage(selectionMsg, 'already available');
             return;
           }
           
@@ -239,7 +255,7 @@ export async function handleRequest(message, query) {
             
             await processingMsg.edit(message);
             // Delete the search results message to keep the chat clean
-            await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+            await safeDeleteMessage(selectionMsg, 'movie on watchlist');
             return;
           }
 
@@ -265,7 +281,7 @@ export async function handleRequest(message, query) {
               
               await processingMsg.edit(message);
               // Delete the search results message to keep the chat clean
-              await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+              await safeDeleteMessage(selectionMsg, 'tv show on watchlist');
               return;
             }
             
@@ -282,7 +298,7 @@ export async function handleRequest(message, query) {
             if (requestableSeasons.length === 0) {
               await processingMsg.edit('All seasons are already available in Plex!');
               // Delete the search results message to keep the chat clean
-              await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+              await safeDeleteMessage(selectionMsg, 'all seasons available');
               return;
             }
 
@@ -331,12 +347,12 @@ export async function handleRequest(message, query) {
           await processingMsg.edit(`Request for "${selected.title || selected.name}" has been submitted! You'll be notified when it's available.`);
           
           // Delete the search results message to keep the chat clean
-          await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+          await safeDeleteMessage(selectionMsg, 'request submitted');
         } catch (error) {
           console.error('Error processing request:', error);
           await processingMsg.edit('An error occurred while processing your request. Please try again later.');
           // Delete the search results message to keep the chat clean
-          await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+          await safeDeleteMessage(selectionMsg, 'error processing');
         }
       } catch (error) {
         console.error('Error handling reaction:', error);
@@ -348,7 +364,7 @@ export async function handleRequest(message, query) {
       if (reason !== 'cancelled' && reason !== 'selected') {
         await message.reply('Request timed out. Please try again.');
         // Delete the search results message on timeout to keep the chat clean
-        await selectionMsg.delete().catch(error => console.error('Failed to delete selection message:', error));
+        await safeDeleteMessage(selectionMsg, 'request timeout');
       } else if (reason === 'selected') {
         // For successful selections, we'll also delete the search message after processing is done
         // The deletion happens after the response message is sent (see below)
