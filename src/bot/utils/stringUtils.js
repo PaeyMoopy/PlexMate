@@ -241,17 +241,35 @@ export async function getPopularTitles() {
   // Check if we should refresh the titles (once per day)
   if (currentTime - lastFetchTime > FETCH_INTERVAL) {
     try {
-      console.log('Fetching fresh titles from TMDB...');
+      // Log with timestamp and clear formatting for visibility
+      const timestamp = new Date().toISOString();
+      console.log('\n==================================================');
+      console.log(`[${timestamp}] 🔄 PlexMate: Refreshing title database from TMDB...`);
+      
       const tmdbTitles = await fetchPopularTitles();
       
       if (tmdbTitles && tmdbTitles.length > 0) {
+        // Keep track of new titles added
+        const prevCount = dynamicPopularTitles.length;
+        
         // Combine with default titles and remove duplicates
         dynamicPopularTitles = [...new Set([...defaultPopularTitles, ...tmdbTitles])];
         lastFetchTime = currentTime;
-        console.log(`Title database updated with ${dynamicPopularTitles.length} unique titles`);
+        
+        const newTitlesCount = dynamicPopularTitles.length - prevCount;
+        console.log(`[${timestamp}] ✅ Title database updated:`);
+        console.log(`   - Total titles: ${dynamicPopularTitles.length}`);
+        console.log(`   - New titles added: ${newTitlesCount}`);
+        console.log(`   - Next update: ${new Date(currentTime + FETCH_INTERVAL).toLocaleString()}`);
+        console.log('==================================================\n');
+      } else {
+        console.log(`[${timestamp}] ⚠️  No titles fetched from TMDB. Using existing database.`);
+        console.log('==================================================\n');
       }
     } catch (error) {
-      console.error('Failed to update title database:', error);
+      const timestamp = new Date().toISOString();
+      console.error(`[${timestamp}] ❌ Failed to update title database:`, error);
+      console.log('==================================================\n');
       // Keep using existing titles if fetch fails
     }
   }

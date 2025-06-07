@@ -88,10 +88,23 @@ export async function fetchPopularTitles() {
     // Wait for all requests to complete
     const results = await Promise.all(promises);
     
+    // Track titles per category for logging
+    const titleCounts = {};
+    endpoints.forEach((endpoint, index) => {
+      const category = endpoint.split('/')[0] + '/' + endpoint.split('/')[1];
+      titleCounts[category] = (titleCounts[category] || 0) + results[index].length;
+    });
+    
     // Flatten and remove duplicates
     const allTitles = [...new Set(results.flat())];
     
-    console.log(`Fetched ${allTitles.length} unique titles from TMDB`);
+    // Enhanced logging
+    console.log(`📊 TMDB title fetching summary:`);
+    Object.entries(titleCounts).forEach(([category, count]) => {
+      console.log(`   - ${category}: ${count} titles`);
+    });
+    console.log(`   - Total unique titles: ${allTitles.length}`);
+    
     return allTitles;
   } catch (error) {
     console.error('Error in fetchPopularTitles:', error);
