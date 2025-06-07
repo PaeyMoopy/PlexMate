@@ -2,7 +2,7 @@ import { searchTMDB } from '../services/tmdb.js';
 import { createRequest, checkAvailability } from '../services/overseerr.js';
 import { addSubscription } from '../services/database.js';
 import { EmbedBuilder } from 'discord.js';
-import { findSimilarTitles, popularTitles } from '../utils/stringUtils.js';
+import { findSimilarTitles, getPopularTitles } from '../utils/stringUtils.js';
 
 /**
  * Safely delete a message with retry
@@ -86,8 +86,11 @@ export async function handleRequest(message, query) {
     const results = await searchTMDB(query);
     
     if (results.length === 0) {
+      // Get the current dynamic title list
+      const dynamicTitles = await getPopularTitles();
+      
       // Try to find similar titles using our string utility
-      const suggestions = findSimilarTitles(query, popularTitles, 0.6, 3);
+      const suggestions = findSimilarTitles(query, dynamicTitles, 0.55, 3);
       
       if (suggestions.length > 0) {
         // Create an embed with suggestions

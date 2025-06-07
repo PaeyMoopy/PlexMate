@@ -38,6 +38,67 @@ export async function testApiKey() {
   }
 }
 
+/**
+ * Fetch popular and trending titles from TMDB
+ * This includes trending movies and TV shows, popular movies and TV shows,
+ * top-rated movies and TV shows, and upcoming movies
+ * @returns {Promise<Array>} Array of movie and TV show titles
+ */
+export async function fetchPopularTitles() {
+  try {
+    const endpoints = [
+      // Trending this week
+      'trending/movie/week',
+      'trending/tv/week',
+      // Popular content
+      'movie/popular',
+      'tv/popular',
+      // Top rated content
+      'movie/top_rated',
+      'tv/top_rated',
+      // Upcoming movies
+      'movie/upcoming',
+      // Now playing movies
+      'movie/now_playing',
+      // TV shows airing today/this week
+      'tv/on_the_air',
+      'tv/airing_today'
+    ];
+
+    // Fetch data from all endpoints
+    const promises = endpoints.map(async endpoint => {
+      try {
+        const url = `https://api.themoviedb.org/3/${endpoint}?api_key=${getApiKey()}&language=en-US&page=1`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (response.ok && data.results) {
+          // Extract titles from results
+          return data.results.map(item => item.title || item.name);
+        } else {
+          console.error(`TMDB API error for ${endpoint}:`, data);
+          return [];
+        }
+      } catch (error) {
+        console.error(`Error fetching ${endpoint}:`, error);
+        return [];
+      }
+    });
+
+    // Wait for all requests to complete
+    const results = await Promise.all(promises);
+    
+    // Flatten and remove duplicates
+    const allTitles = [...new Set(results.flat())];
+    
+    console.log(`Fetched ${allTitles.length} unique titles from TMDB`);
+    return allTitles;
+  } catch (error) {
+    console.error('Error in fetchPopularTitles:', error);
+    return [];
+  }
+}
+
 export async function searchTMDB(query, mediaType = null) {
   try {
     // Get API key at runtime

@@ -2,7 +2,7 @@ import { searchTMDB } from '../services/tmdb.js';
 import { EmbedBuilder } from 'discord.js';
 import { addSubscription, getSubscriptions } from '../services/database.js';
 import { checkAvailability, checkIfS1E1Exists } from '../services/overseerr.js';
-import { findSimilarTitles, popularTitles } from '../utils/stringUtils.js';
+import { findSimilarTitles, getPopularTitles } from '../utils/stringUtils.js';
 
 /**
  * Safely delete a message with retry
@@ -75,8 +75,11 @@ export async function handleSubscribe(message, query) {
     const results = await searchTMDB(searchQuery, isEpisodeSubscription ? 'tv' : null);
     
     if (results.length === 0) {
+      // Get the current dynamic title list
+      const dynamicTitles = await getPopularTitles();
+      
       // Try to find similar titles using our string utility
-      const suggestions = findSimilarTitles(searchQuery, popularTitles, 0.6, 3);
+      const suggestions = findSimilarTitles(searchQuery, dynamicTitles, 0.55, 3);
       
       if (suggestions.length > 0) {
         // Create an embed with suggestions
