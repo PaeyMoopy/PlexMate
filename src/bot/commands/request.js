@@ -385,7 +385,8 @@ Please try again later.`,
     });
 
     collector.on('end', async (_, reason) => {
-      if (reason !== 'cancelled' && reason !== 'selected') {
+      console.log('Request collector ended with reason:', reason);
+      if (reason === 'time') {
         // Simple timeout message - we don't have a specific selection to show
         await message.reply('Search results timed out. Please try again.');
         // Delete the search results message on timeout to keep the chat clean

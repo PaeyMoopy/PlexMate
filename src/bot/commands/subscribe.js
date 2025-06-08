@@ -391,6 +391,8 @@ export async function handleSubscribe(message, query, correctionMsg = null) {
     });
     
     collector.on('end', async (_, reason) => {
+      // Log the reason for debugging purposes
+      console.log('Subscription collector ended with reason:', reason);
       // Only show timeout message if it actually timed out
       if (reason === 'time') {
         await message.reply('Search results timed out. Please try again.');
