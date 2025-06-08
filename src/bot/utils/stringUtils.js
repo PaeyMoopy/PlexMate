@@ -145,6 +145,15 @@ export function findSimilarTitles(query, titles, threshold = 0.55, limit = 3) {
 }
 
 import { fetchPopularTitles } from '../services/tmdb.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Calculate paths for data storage
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const dataDir = path.join(__dirname, '..', '..', 'data');
+const titleDbFile = path.join(dataDir, 'title_database.json');
 
 /**
  * Default popular movie and TV show titles for more accurate suggestions
@@ -233,6 +242,82 @@ let isFirstRun = true; // Flag to guarantee title update on first run
 const FETCH_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 /**
+ * Ensure data directory exists
+ */
+function ensureDataDirExists() {
+  if (!fs.existsSync(dataDir)) {
+    try {
+      fs.mkdirSync(dataDir, { recursive: true });
+      console.log(`Created data directory at: ${dataDir}`);
+    } catch (error) {
+      console.error(`Failed to create data directory: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * Save titles and metadata to disk
+ * @param {Array} titles - List of titles to save
+ * @param {number} timestamp - Last fetch timestamp
+ */
+function saveTitlesToDisk(titles, timestamp) {
+  ensureDataDirExists();
+  
+  const data = {
+    titles,
+    lastFetchTime: timestamp,
+    totalCount: titles.length,
+    updatedAt: new Date().toISOString()
+  };
+  
+  try {
+    fs.writeFileSync(titleDbFile, JSON.stringify(data, null, 2));
+    console.log(`Title database saved to disk: ${titleDbFile}`);
+    console.log(`Saved ${titles.length} titles`);
+  } catch (error) {
+    console.error(`Failed to save title database: ${error.message}`);
+  }
+}
+
+/**
+ * Load titles from disk if available
+ * @returns {Object|null} Loaded data or null if not found
+ */
+function loadTitlesFromDisk() {
+  try {
+    if (fs.existsSync(titleDbFile)) {
+      const rawData = fs.readFileSync(titleDbFile, 'utf8');
+      const data = JSON.parse(rawData);
+      console.log(`Title database loaded from disk: ${titleDbFile}`);
+      console.log(`Loaded ${data.titles.length} titles, last updated: ${new Date(data.updatedAt).toLocaleString()}`);
+      return data;
+    }
+  } catch (error) {
+    console.error(`Failed to load title database: ${error.message}`);
+  }
+  return null;
+}
+
+// Try to load titles from disk on module initialization
+(() => {
+  const loadedData = loadTitlesFromDisk();
+  if (loadedData && loadedData.titles && loadedData.titles.length > 0) {
+    dynamicPopularTitles = [...loadedData.titles];
+    lastFetchTime = loadedData.lastFetchTime || 0;
+    
+    // If data is fresh (less than 24 hours old), we don't need first run update
+    if (Date.now() - lastFetchTime < FETCH_INTERVAL) {
+      isFirstRun = false;
+      console.log('Using cached title database - still fresh');
+    } else {
+      console.log('Cached title database is stale - will update on first use');
+    }
+  } else {
+    console.log('No cached title database found - will create on first use');
+  }
+})();
+
+/**
  * Dynamic title list that combines hardcoded titles with those from TMDB API
  * Gets refreshed periodically to keep up with new releases
  */
@@ -256,6 +341,9 @@ export async function getPopularTitles() {
         // Combine with default titles and remove duplicates
         dynamicPopularTitles = [...new Set([...defaultPopularTitles, ...tmdbTitles])];
         lastFetchTime = currentTime;
+        
+        // Save to disk for persistence
+        saveTitlesToDisk(dynamicPopularTitles, lastFetchTime);
         
         const newTitlesCount = dynamicPopularTitles.length - prevCount;
         console.log(`[${timestamp}] ✅ Title database updated:`);

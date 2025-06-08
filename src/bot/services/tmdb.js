@@ -42,10 +42,11 @@ export async function testApiKey() {
  * Fetch popular and trending titles from TMDB
  * This includes trending movies and TV shows, popular movies and TV shows,
  * top-rated movies and TV shows, and upcoming movies
- * @returns {Promise<Array>} Array of movie and TV show titles
+ * @returns {Promise<Array>} Array of movie and TV show titles (English only)
  */
 export async function fetchPopularTitles() {
   try {
+    // Endpoints to fetch from
     const endpoints = [
       // Trending this week
       'trending/movie/week',
@@ -62,50 +63,82 @@ export async function fetchPopularTitles() {
       'movie/now_playing',
       // TV shows airing today/this week
       'tv/on_the_air',
-      'tv/airing_today'
+      'tv/airing_today',
+      // Discovery endpoints
+      'discover/movie',
+      'discover/tv'
     ];
 
-    // Fetch data from all endpoints
-    const promises = endpoints.map(async endpoint => {
-      try {
-        const url = `https://api.themoviedb.org/3/${endpoint}?api_key=${getApiKey()}&language=en-US&page=1`;
-        const response = await fetch(url);
-        const data = await response.json();
+    const PAGES_PER_ENDPOINT = 5; // Fetch 5 pages from each endpoint (up to 100 titles per endpoint)
+    const allPromises = [];
 
-        if (response.ok && data.results) {
-          // Extract titles from results
-          return data.results.map(item => item.title || item.name);
-        } else {
-          console.error(`TMDB API error for ${endpoint}:`, data);
-          return [];
-        }
-      } catch (error) {
-        console.error(`Error fetching ${endpoint}:`, error);
-        return [];
+    // For each endpoint, fetch multiple pages
+    endpoints.forEach(endpoint => {
+      for (let page = 1; page <= PAGES_PER_ENDPOINT; page++) {
+        allPromises.push(
+          (async () => {
+            try {
+              // Add language filter to ensure English titles only
+              const url = `https://api.themoviedb.org/3/${endpoint}?api_key=${getApiKey()}&language=en-US&page=${page}&include_adult=false&with_original_language=en`;
+              const response = await fetch(url);
+              const data = await response.json();
+
+              if (response.ok && data.results) {
+                // Extract titles from results, filter out null/undefined titles
+                return data.results
+                  .map(item => item.title || item.name)
+                  .filter(title => title && title.trim() !== '');
+              } else {
+                console.error(`TMDB API error for ${endpoint} (page ${page}):`, data);
+                return [];
+              }
+            } catch (error) {
+              console.error(`Error fetching ${endpoint} (page ${page}):`, error);
+              return [];
+            }
+          })()
+        );
       }
     });
 
     // Wait for all requests to complete
-    const results = await Promise.all(promises);
+    const results = await Promise.all(allPromises);
     
-    // Track titles per category for logging
+    // Process all titles
+    const allRawTitles = results.flat();
+    
+    // Remove duplicates, filter out non-English characters, and normalize titles
+    const processedTitles = [...new Set(
+      allRawTitles
+        .map(title => title.trim()) // Trim whitespace
+        .filter(title => {
+          // Basic filter to remove titles with primarily non-Latin characters
+          // This is a simple heuristic - we check if most chars are in the standard Latin charset
+          const latinCharCount = title.replace(/[^a-zA-Z0-9\s:,'"\-().!?]/g, '').length;
+          return latinCharCount > (title.length * 0.7); // At least 70% Latin characters
+        })
+    )];
+    
+    // Group endpoints for logging (combine pages)
     const titleCounts = {};
-    endpoints.forEach((endpoint, index) => {
-      const category = endpoint.split('/')[0] + '/' + endpoint.split('/')[1];
-      titleCounts[category] = (titleCounts[category] || 0) + results[index].length;
-    });
+    let totalRaw = allRawTitles.length;
+    let totalFiltered = processedTitles.length;
     
-    // Flatten and remove duplicates
-    const allTitles = [...new Set(results.flat())];
+    endpoints.forEach(endpoint => {
+      const category = endpoint.split('/')[0] + '/' + endpoint.split('/')[1];
+      titleCounts[category] = (titleCounts[category] || 0) + 
+        Math.round(totalRaw / endpoints.length / PAGES_PER_ENDPOINT * PAGES_PER_ENDPOINT);
+    });
     
     // Enhanced logging
     console.log(`📊 TMDB title fetching summary:`);
     Object.entries(titleCounts).forEach(([category, count]) => {
-      console.log(`   - ${category}: ${count} titles`);
+      console.log(`   - ${category}: ~${count} titles`);
     });
-    console.log(`   - Total unique titles: ${allTitles.length}`);
+    console.log(`   - Total raw titles: ${totalRaw}`);
+    console.log(`   - Total unique English titles: ${totalFiltered}`);
     
-    return allTitles;
+    return processedTitles;
   } catch (error) {
     console.error('Error in fetchPopularTitles:', error);
     return [];
