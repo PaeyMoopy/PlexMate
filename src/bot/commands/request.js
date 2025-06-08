@@ -243,6 +243,9 @@ export async function handleRequest(message, query, correctionMsg = null) {
             if (correctionMsg) {
               await safeDeleteMessage(correctionMsg, 'request completed - already available');
             }
+            
+            // Stop the collector to prevent timeout message
+            collector.stop('selected');
             return;
           }
 
@@ -281,6 +284,9 @@ export async function handleRequest(message, query, correctionMsg = null) {
               if (correctionMsg) {
                 await safeDeleteMessage(correctionMsg, 'request completed - all seasons available');
               }
+              
+              // Stop the collector to prevent timeout message
+              collector.stop('selected');
               return;
             }
 
@@ -343,6 +349,9 @@ You'll be notified when it's available.`,
             await safeDeleteMessage(correctionMsg, 'request completed');
           }
           
+          // Stop the collector to prevent timeout message
+          collector.stop('selected');
+          
         } catch (error) {
           console.error('Error processing request:', error);
           const errorEmbed = createStatusEmbed(
@@ -360,6 +369,9 @@ Please try again later.`,
           if (correctionMsg) {
             await safeDeleteMessage(correctionMsg, 'request error');
           }
+          
+          // Stop the collector to prevent timeout message
+          collector.stop('error');
         }
       } catch (error) {
         console.error('Error handling reaction:', error);
