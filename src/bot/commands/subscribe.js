@@ -59,7 +59,7 @@ function createStatusEmbed(mediaItem, statusMessage, color = '#0099ff', isEpisod
     .setFooter({ text: `Type: ${mediaItem.media_type} • ${isEpisodeSubscription ? 'Episode notifications enabled' : 'Release notification only'}` });
 }
 
-export async function handleSubscribe(message, query) {
+export async function handleSubscribe(message, query, correctionMsg = null) {
   if (!query) {
     const embed = createStatusEmbed({}, 'Please provide a title to subscribe to!', '#ff0000');
     await message.reply({ embeds: [embed] });
@@ -127,8 +127,10 @@ export async function handleSubscribe(message, query) {
           
           // Recursively call handleSubscribe with the suggested title
           await safeDeleteMessage(suggestionMsg, 'suggestion selected');
-          await message.reply(`Searching for "${selectedSuggestion}" instead...`);
-          await handleSubscribe(message, selectedSuggestion + (isEpisodeSubscription ? ' -e' : ''));
+          const correctionMsg = await message.reply(`🔍 Searching for "${selectedSuggestion}" instead...`);
+          
+          // Add this line to the handleSubscribe function to track and delete correction messages
+          await handleSubscribe(message, selectedSuggestion + (isEpisodeSubscription ? ' -e' : ''), correctionMsg);
           
           suggestionCollector.stop('selected');
         });
@@ -149,181 +151,169 @@ export async function handleSubscribe(message, query) {
       }
     }
 
-    // Default to 3 results
-    const maxResults = 3;
-
-    // Take first N results
-    const options = results.slice(0, maxResults);
-    
-    // Create embeds for each result
-    const embeds = options.map((result, index) => {
-      return new EmbedBuilder()
-        .setTitle(`${index + 1}. ${result.title || result.name}`)
-        .setDescription(
-          `Type: ${result.media_type}\n` +
-          `Release Date: ${result.release_date || result.first_air_date}\n` +
-          `Overview: ${result.overview}`
-        )
-        .setImage(`https://image.tmdb.org/t/p/w500${result.poster_path}`)
-        .setFooter({ text: isEpisodeSubscription ? 'Episode notifications enabled' : 'Release notification only' });
-    });
-
-    // Add instructions embed
-    const instructionsEmbed = new EmbedBuilder()
+    // Show search results
+    const searchResultsEmbed = new EmbedBuilder()
+      .setColor('#0099ff')
       .setTitle('Search Results')
-      .setDescription(`Please select what you want to subscribe to${isEpisodeSubscription ? ' (Episode notifications)' : ':'}`);
-    
-    embeds.unshift(instructionsEmbed);
+      .setDescription(`Found ${results.length} results for "${searchQuery}".\nReact with the number of your selection or ❌ to cancel.`)
+      .addFields(
+        ...results.slice(0, 5).map((result, index) => {
+          const title = result.title || result.name;
+          const date = result.release_date || result.first_air_date;
+          const year = date ? `(${date.substring(0, 4)})` : '';
+          const resultType = result.media_type === 'movie' ? 'Movie' : 'TV Show';
+          return {
+            name: `${index + 1}. ${title} ${year}`,
+            value: `Type: ${resultType}\nOverview: ${result.overview ? result.overview.substring(0, 100) + '...' : 'No overview available'}`
+          };
+        })
+      );
 
-    const selectionMsg = await message.reply({ embeds });
-    
-    // Add number reactions
-    for (let i = 0; i < options.length; i++) {
+    const selectionMsg = await message.reply({ embeds: [searchResultsEmbed] });
+
+    // Add reaction options
+    const maxResults = Math.min(results.length, 5);
+    for (let i = 0; i < maxResults; i++) {
       await selectionMsg.react(`${i + 1}️⃣`);
     }
     await selectionMsg.react('❌');
 
     // Create reaction collector
     const filter = (reaction, user) => {
-      return user.id === message.author.id;
+      const validReactions = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '❌'].slice(0, maxResults + 1);
+      return validReactions.includes(reaction.emoji.name) && user.id === message.author.id;
     };
-
-    const collector = selectionMsg.createReactionCollector({ filter, time: 30000 });
+    
+    const collector = selectionMsg.createReactionCollector({ filter, time: 60000, max: 1 });
 
     collector.on('collect', async (reaction) => {
-      if (reaction.emoji.name === '❌') {
-        await message.reply('Subscription cancelled.');
-        // Delete the search results message to keep the chat clean
-        await safeDeleteMessage(selectionMsg, 'subscription cancelled');
-        collector.stop('cancelled');
-        return;
-      }
-
-      const index = Number(reaction.emoji.name[0]) - 1;
-      const selected = options[index];
-
+      // Handle selection
       try {
-        // Check for existing subscription
-        const subscriptions = getSubscriptions(message.author.id.toString());
-        const existingSubscription = subscriptions.find(sub => sub.media_id === selected.id.toString());
-
-        // Check for existing episode subscription first
-        if (existingSubscription && existingSubscription.episode_subscription === 1 && isEpisodeSubscription) {
-          const embed = createStatusEmbed(
-            selected,
-            `ℹ️ You are already subscribed to episodes of "${selected.title || selected.name}"!`,
-            '#FFA500', // Orange for info
-            isEpisodeSubscription
-          );
-          await message.reply({ embeds: [embed] });
-          // Delete the search results message
-          await safeDeleteMessage(selectionMsg, 'already subscribed to episodes');
-          collector.stop('selected');
+        if (reaction.emoji.name === '❌') {
+          await safeDeleteMessage(selectionMsg, 'selection cancelled');
+          await message.reply('Selection cancelled.');
+          collector.stop('cancelled');
           return;
         }
-
-        // For TV shows with "Release only" subscription, check if S1E1 already exists
-        if (selected.media_type === 'tv' && !isEpisodeSubscription) {
-          const { hasS1E1 } = await checkAvailability('tv', selected.id);
+        
+        // Get selected item
+        const resultIndex = Number(reaction.emoji.name[0]) - 1;
+        const selected = results[resultIndex];
+        
+        // Check for existing subscription
+        const existingSubscription = getSubscriptions(message.author.id)
+          .find(s => s.mediaId === selected.id.toString());
+        
+        // For TV shows, handle episode subscription logic
+        if (selected.media_type === 'tv' && isEpisodeSubscription) {
+          // Check if S1E1 exists in Overseerr
+          const s1e1Exists = await checkIfS1E1Exists(selected.id);
           
-          // If already subscribed to release notifications, notify user and stop
-          if (existingSubscription && existingSubscription.episode_subscription === 0 && !isEpisodeSubscription) {
-            const embed = createStatusEmbed(
-              selected,
-              `ℹ️ You are already subscribed to release notifications for "${selected.title || selected.name}"!`,
-              '#FFA500', // Orange for info
-              isEpisodeSubscription
-            );
-            await message.reply({ embeds: [embed] });
-            // Delete the search results message
-            await safeDeleteMessage(selectionMsg, 'already subscribed to releases');
-            collector.stop('selected');
-            return;
-          }
-
-          if (hasS1E1) {
-            // S1E1 already exists, so a "Release only" subscription would never trigger
-            const warningEmbed = createStatusEmbed(
-              selected,
-              `⚠️ **Warning:** Season 1 of "${selected.name}" already exists in Plex!\n\n` +
-              `A "Release only" subscription would never trigger notifications.\n\n` +
-              `Would you like to subscribe for ALL episodes instead?`,
-              '#FFA500', // Orange for warning
-              false
-            );
-            const confirmMsg = await message.reply({ embeds: [warningEmbed] });
+          if (!s1e1Exists) {
+            // Check availability
+            const availability = await checkAvailability(selected.media_type, selected.id);
             
-            // Add the thumbs up and down reactions
-            await confirmMsg.react('👍');
-            await confirmMsg.react('👎');
-            
-            // Create a filter to only accept reactions from the original message author
-            const confirmFilter = (reaction, user) => {
-              return ['👍', '👎'].includes(reaction.emoji.name) && user.id === message.author.id;
-            };
-            
-            // Create reaction collector with the filter and timeout
-            const confirmCollector = confirmMsg.createReactionCollector({ 
-              filter: confirmFilter, 
-              time: 30000,
-              max: 1 
-            });
-            
-            confirmCollector.on('collect', async (reaction) => {
-              // Delete the confirmation message to keep the chat clean
-              await safeDeleteMessage(confirmMsg, 'confirmation decision made');
+            if (!availability || !availability.available) {
+              // Show confirmation dialog for potential episode subscription issues
+              const confirmEmbed = new EmbedBuilder()
+                .setColor('#FFA500')
+                .setTitle(`⚠️ Episode Notification Warning for ${selected.name}`)
+                .setDescription(
+                  `This TV show doesn't have season 1 episode 1 available yet. ` +
+                  `Episode notifications may not work properly until the show is added.\n\n` +
+                  `Do you want to:\n` +
+                  `👍 Add a regular release notification subscription\n` +
+                  `👎 Cancel this subscription`
+                )
+                .setThumbnail(`https://image.tmdb.org/t/p/w500${selected.poster_path}`);
+                
+              const confirmMsg = await message.reply({ embeds: [confirmEmbed] });
               
-              if (reaction.emoji.name === '👍') {
-                // User opted for episode subscription instead
-                isEpisodeSubscription = true;
+              // Add reaction options
+              await confirmMsg.react('👍');
+              await confirmMsg.react('👎');
+              
+              // Create a filter to only accept reactions from the original message author
+              const confirmFilter = (reaction, user) => {
+                return ['👍', '👎'].includes(reaction.emoji.name) && user.id === message.author.id;
+              };
+              
+              const confirmCollector = confirmMsg.createReactionCollector({ 
+                filter: confirmFilter, 
+                time: 30000,
+                max: 1
+              });
+              
+              confirmCollector.on('collect', async (reaction) => {
+                await safeDeleteMessage(confirmMsg, 'confirmation selected');
                 
-                // Create the subscription
-                const success = addSubscription(
-                  message.author.id.toString(),
-                  selected.id.toString(),
-                  selected.media_type,
-                  selected.title || selected.name,
-                  true // Episode subscription
-                );
-                
-                if (!success) {
-                  throw new Error('Failed to add subscription');
+                if (reaction.emoji.name === '👍') {
+                  // Add a regular subscription instead
+                  isEpisodeSubscription = false;
+                  
+                  const success = addSubscription(
+                    message.author.id.toString(),
+                    selected.id.toString(),
+                    selected.media_type,
+                    selected.name,
+                    false // regular subscription
+                  );
+                  
+                  if (!success) {
+                    throw new Error('Failed to add subscription');
+                  }
+                  
+                  const subscribeEmbed = createStatusEmbed(
+                    selected,
+                    `✅ You are now subscribed to "${selected.name}" (release notification only).`,
+                    '#00FF00', // Green for success
+                    false
+                  );
+                  
+                  await message.reply({ embeds: [subscribeEmbed] });
+                  
+                  // Delete the correction message if it exists
+                  if (correctionMsg) {
+                    await safeDeleteMessage(correctionMsg, 'subscription completed - converted to regular');
+                  }
+                  
+                } else {
+                  const cancelEmbed = createStatusEmbed(
+                    selected,
+                    `❌ Subscription cancelled.`,
+                    '#FF0000', // Red for cancel
+                    false
+                  );
+                  await message.reply({ embeds: [cancelEmbed] });
+                  
+                  // Delete the correction message if it exists
+                  if (correctionMsg) {
+                    await safeDeleteMessage(correctionMsg, 'subscription cancelled in confirmation');
+                  }
                 }
                 
-                const successEmbed = createStatusEmbed(
-                  selected,
-                  `✅ Subscribing to all episodes of "${selected.name}" instead!`,
-                  '#00FF00', // Green for success
-                  true // Episode subscription
-                );
-                await message.reply({ embeds: [successEmbed] });
-              } else if (reaction.emoji.name === '👎') {
-                // User chose thumbs down - now we CANCEL the subscription rather than creating a useless one
-                const cancelEmbed = createStatusEmbed(
-                  selected,
-                  `❌ Subscription cancelled for "${selected.name}"\n\nYou chose not to subscribe to episodes, and a release-only subscription would not work.`,
-                  '#808080', // Gray for cancelled
-                  false
-                );
-                await message.reply({ embeds: [cancelEmbed] });
-              }
+                confirmCollector.stop('selected');
+              });
               
-              confirmCollector.stop('selected');
-            });
-            
-            confirmCollector.on('end', async (collected, reason) => {
-              // Only show timeout message if it actually timed out
-              if (reason === 'time') {
-                await message.reply('Subscription creation timed out. Please try again.');
-                // Delete the confirmation message if it wasn't already deleted
-                await safeDeleteMessage(confirmMsg, 'confirmation timeout');
-              }
-            });
-            
-            // Delete the search results message since we're showing a confirmation
-            await safeDeleteMessage(selectionMsg, 'showing confirmation');
-            collector.stop('selected');
-            return;
+              confirmCollector.on('end', async (collected, reason) => {
+                // Only show timeout message if it actually timed out
+                if (reason === 'time') {
+                  await message.reply('Subscription creation timed out. Please try again.');
+                  // Delete the confirmation message if it wasn't already deleted
+                  await safeDeleteMessage(confirmMsg, 'confirmation timeout');
+                  
+                  // Delete the correction message if it exists
+                  if (correctionMsg) {
+                    await safeDeleteMessage(correctionMsg, 'confirmation timeout');
+                  }
+                }
+              });
+              
+              // Delete the search results message since we're showing a confirmation
+              await safeDeleteMessage(selectionMsg, 'showing confirmation');
+              collector.stop('selected');
+              return;
+            }
           }
         }
 
@@ -371,6 +361,12 @@ export async function handleSubscribe(message, query) {
         );
         
         await message.reply({ embeds: [embed] });
+        
+        // Delete the correction message if it exists
+        if (correctionMsg) {
+          await safeDeleteMessage(correctionMsg, 'subscription completed');
+        }
+        
       } catch (error) {
         console.error('Error managing subscription:', error);
         
@@ -383,6 +379,11 @@ export async function handleSubscribe(message, query) {
           .setDescription(`❌ An error occurred while managing your subscription: ${error.message}`);
           
         await message.reply({ embeds: [errorEmbed] });
+        
+        // Delete the correction message if it exists
+        if (correctionMsg) {
+          await safeDeleteMessage(correctionMsg, 'subscription error');
+        }
       }
       
       // Stop collector after user makes a selection
@@ -395,6 +396,11 @@ export async function handleSubscribe(message, query) {
         await message.reply('Search results timed out. Please try again.');
         // Delete the search results message on timeout
         await safeDeleteMessage(selectionMsg, 'subscription timeout');
+        
+        // Delete the correction message if it exists
+        if (correctionMsg) {
+          await safeDeleteMessage(correctionMsg, 'subscription timeout');
+        }
       }
     });
 
@@ -407,5 +413,10 @@ export async function handleSubscribe(message, query) {
       .setDescription(`❌ An error occurred while processing your subscription: ${error.message}`);
     
     await message.reply({ embeds: [errorEmbed] });
+    
+    // Delete the correction message if it exists
+    if (correctionMsg) {
+      await safeDeleteMessage(correctionMsg, 'subscription general error');
+    }
   }
 }

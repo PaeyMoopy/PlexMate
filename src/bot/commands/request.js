@@ -72,7 +72,7 @@ function getPosterUrl(posterPath) {
   return posterPath ? `https://image.tmdb.org/t/p/w500${posterPath}` : null;
 }
 
-export async function handleRequest(message, query) {
+export async function handleRequest(message, query, correctionMsg = null) {
   if (!query) {
     await message.reply('Please provide a title to search for!');
     return;
@@ -137,9 +137,19 @@ export async function handleRequest(message, query) {
           const selectedSuggestion = suggestions[suggestionIndex];
           
           // Recursively call handleRequest with the suggested title
-          await safeDeleteMessage(suggestionMsg, 'suggestion selected');
-          await message.reply(`Searching for "${selectedSuggestion}" instead...`);
-          await handleRequest(message, selectedSuggestion);
+          const correctedQuery = suggestions[suggestionIndex];
+          const correctionMsg = await message.reply(`🔍 Searching for "${correctedQuery}" instead...`);
+          const results = await searchTMDB(correctedQuery);
+          
+          if (results.length === 0) {
+            await message.reply(`❌ No results found for "${correctedQuery}" either. Please try another search.`);
+            await safeDeleteMessage(correctionMsg, 'no results for correction');
+            await safeDeleteMessage(suggestionMsg, 'no results for correction');
+            return;
+          }
+          
+          await safeDeleteMessage(suggestionMsg, 'correction completed');
+          await handleRequest(message, correctedQuery, correctionMsg);
           
           suggestionCollector.stop('selected');
         });
@@ -160,276 +170,117 @@ export async function handleRequest(message, query) {
       }
     }
 
-    // Take first N results based on settings
-    const options = results.slice(0, maxResults);
-    
-    // Check availability for each result
-    const availabilityChecks = await Promise.all(
-      options.map(result => checkAvailability(result.media_type, result.id))
-    );
-
-    // Create embeds for each result
-    const embeds = options.map((result, index) => {
-      const availCheck = availabilityChecks[index];
-      const { isAvailable } = availCheck;
-      
-      // Start building the description
-      let description = `Overview: ${result.overview}`;
-      
-      // Add theatrical release date info
-      const releaseDate = result.release_date || result.first_air_date;
-      if (releaseDate) {
-        description += `\n\n🎬 Theatrical Release: ${releaseDate}`;
-      }
-      
-      // Skip detailed release info for older movies (pre-2020)
-      const releaseYear = releaseDate ? parseInt(releaseDate.substring(0, 4), 10) : 0;
-      const isOlderMovie = releaseYear < 2020;
-      
-      // Add availability information based on simplified categories
-      if (isAvailable) {
-        // Category 1: Fully available in Plex
-        description += '\n\n\n✅ Plex Availability: Available to watch now!';
-      } else if (result.media_type === 'movie') {
-        // Check if movie exists in Radarr
-        const inRadarr = availCheck.radarrStatus?.configured && availCheck.radarrStatus?.exists;
-        
-        if (inRadarr) {
-          // Category 2: Added to Radarr but not downloaded yet
-          description += '\n\n\n💾 Plex Availability: On our watchlist';
-          
-          // Handle movies still in theaters vs digitally released
-          if (!isOlderMovie && availCheck.releaseStatus === 'not_released') {
-            description += '\n🎬 Currently only in theaters - will be added when it releases for home viewing';
-          } else if (availCheck.radarrStatus.queueStatus === 'downloading') {
-            description += '\n⬇️ Currently downloading - will be available soon!';
-          } else {
-            description += '\n🔍 Looking for a good quality copy to download';
-          }
-        } else {
-          // Category 3: Not in Radarr/Sonarr yet
-          description += '\n\n\n💾 Plex Availability: Not in our library yet';
-          description += '\n✴️ Click the reactions below to request this title';
-        }
-      } else if (result.media_type === 'tv') {
-        if (isAvailable) {
-          // Fully available
-          description += '\n\n\n✅ Plex Availability: Available to watch now!';
-        } else {
-          // Check if show exists in Sonarr
-          const inSonarr = availCheck.sonarrStatus?.configured && availCheck.sonarrStatus?.exists;
-          
-          if (inSonarr) {
-            // TV show in Sonarr but not available yet
-            description += '\n\n\n💾 Plex Availability: On our watchlist';
-            
-            if (availCheck.sonarrStatus.isUpcoming) {
-              // Show hasn't premiered yet
-              const firstAired = availCheck.sonarrStatus.firstAired;
-              const nextAiring = availCheck.sonarrStatus.nextAiring;
-              
-              if (firstAired) {
-                const firstAiredDate = new Date(firstAired).toLocaleDateString();
-                description += `\n🍿 Show premieres on ${firstAiredDate}`;
-              } else if (nextAiring) {
-                const nextAiringDate = new Date(nextAiring).toLocaleDateString();
-                description += `\n📅 Next episode airs on ${nextAiringDate}`;
-              } else {
-                description += '\n🍿 This show hasn\'t premiered yet';
-              }
-            } else {
-              // Show is airing but we don't have episodes yet
-              description += '\n🔎 Looking for episodes to download';
-            }
-            
-            // Check if Season 1 is specifically missing
-            if (availCheck.hasS1E1 === false) {
-              description += '\nℹ️ Season 1 not currently available';
-            }
-          } else {
-            // Not in Sonarr at all
-            description += '\n\n\n💾 Plex Availability: Not in our library yet';
-            if (availCheck.hasS1E1 === false) {
-              description += '\nℹ️ Season 1 not currently available';
-            }
-            description += '\n✴️ Click the reactions below to request this title';
-          }
-        }
-      }
-      
-      // Generate the footer text
-      let footerText = `Type: ${result.media_type}`;
-      
-      // Match footer text to our simplified availability categories
-      if (isAvailable) {
-        footerText += ' • Available to watch now';
-      } else if (result.media_type === 'movie' && availCheck.radarrStatus?.configured && availCheck.radarrStatus?.exists) {
-        // Added to Radarr
-        if (availCheck.radarrStatus.queueStatus === 'downloading') {
-          footerText += ' • Downloading now';
-        } else if (!isOlderMovie && availCheck.releaseStatus === 'not_released') {
-          footerText += ' • Coming soon'; 
-        } else {
-          footerText += ' • On our watchlist'; 
-        }
-      } else if (result.media_type === 'tv' && availCheck.sonarrStatus?.configured && availCheck.sonarrStatus?.exists) {
-        // Added to Sonarr
-        if (availCheck.sonarrStatus.isUpcoming) {
-          footerText += ' • Coming soon';
-        } else {
-          footerText += ' • On our watchlist';
-        }
-      } else {
-        // Not requested yet
-        footerText += ' • Not in library';
-      }
-      
-      return new EmbedBuilder()
-        .setColor(isAvailable ? '#00FF00' : '#0099ff')
-        .setTitle(`${result.title || result.name} ${getYear(result)}`.trim())
-        .setURL(getDetailUrl(result.media_type, result.id))
-        .setDescription(description)
-        .setThumbnail(getPosterUrl(result.poster_path))
-        .setFooter({ text: footerText });
-    });
-
-    // Add instructions embed
-    const instructionsEmbed = new EmbedBuilder()
+    // Create selection message with results
+    const embed = new EmbedBuilder()
+      .setColor('#0099ff')
       .setTitle('Search Results')
-      .setDescription('Please select an option by reacting with the corresponding number:');
-    
-    embeds.unshift(instructionsEmbed);
+      .setDescription(`Found ${results.length} results for "${query}". React with the number of your selection, or ❌ to cancel.`)
+      .addFields(
+        results.slice(0, maxResults).map((result, index) => {
+          const title = result.title || result.name;
+          const year = getYear(result);
+          const type = result.media_type === 'movie' ? 'Movie' : 'TV Show';
+          return {
+            name: `${index + 1}. ${title} ${year}`,
+            value: `Type: ${type}\nOverview: ${result.overview ? (result.overview.length > 150 ? result.overview.substring(0, 150) + '...' : result.overview) : 'No overview available'}`
+          };
+        })
+      );
 
-    const selectionMsg = await message.reply({ embeds });
+    const selectionMsg = await message.reply({ embeds: [embed] });
     
-    // Add number reactions
-    for (let i = 0; i < options.length; i++) {
+    // Add reaction options
+    for (let i = 0; i < Math.min(maxResults, results.length); i++) {
       await selectionMsg.react(`${i + 1}️⃣`);
     }
     await selectionMsg.react('❌');
 
     // Create reaction collector
     const filter = (reaction, user) => {
-      const validReactions = [...Array(options.length)].map((_, i) => `${i + 1}️⃣`).concat('❌');
+      const validReactions = ['1️⃣', '2️⃣', '3️⃣', '❌'].slice(0, Math.min(maxResults, results.length) + 1);
       return validReactions.includes(reaction.emoji.name) && user.id === message.author.id;
     };
+    
+    const collector = selectionMsg.createReactionCollector({ 
+      filter, 
+      time: 60000, 
+      max: 1 
+    });
 
-    const collector = selectionMsg.createReactionCollector({ filter, time: 30000 });
-
-    collector.on('collect', async (reaction, user) => {
+    collector.on('collect', async (reaction) => {
       try {
+        // Handle cancel selection
         if (reaction.emoji.name === '❌') {
-          // Simple cancel message since we don't have a selection yet
-          const cancelMsg = await message.reply('Request cancelled.');
-          // Delete the search results message to keep the chat clean
-          await safeDeleteMessage(selectionMsg, 'cancel button');
+          await safeDeleteMessage(selectionMsg, 'cancelled');
+          await message.reply('Selection cancelled.');
           collector.stop('cancelled');
           return;
         }
-
-        const index = Number(reaction.emoji.name[0]) - 1;
-        const selected = options[index];
-        const { isAvailable, details } = availabilityChecks[index];
-
-        // Stop the collector immediately to prevent double-selections
-        collector.stop('selected');
-
-        // Send a processing message
-        const processingMsg = await message.reply('Processing your request...');
+        
+        // Get selected media item
+        const resultIndex = Number(reaction.emoji.name[0]) - 1;
+        const selected = results[resultIndex];
+        
+        // Create processing message
+        const processingMsg = await message.reply(`⏳ Processing request for ${selected.title || selected.name}...`);
 
         try {
-          // Check if content is already available
-          if (isAvailable) {
+          // Check availability
+          const availability = await checkAvailability(selected.media_type, selected.id);
+          
+          if (availability && availability.available) {
+            // Already available
             const embed = createStatusEmbed(
               selected,
-              `✅ ${selected.title || selected.name} is already available in Plex!`,
+              `✅ Good news! ${selected.title || selected.name} is already available in the library!`,
               '#00FF00' // Green for available content
             );
             await processingMsg.edit({ content: '', embeds: [embed] });
             // Delete the search results message to keep the chat clean
-            await safeDeleteMessage(selectionMsg, 'already available');
-            return;
-          }
-          
-          // Check if the movie is already in Radarr 
-          if (selected.media_type === 'movie' && availabilityChecks[index].radarrStatus?.exists) {
-            // Already in Radarr but not downloaded yet
-            const status = availabilityChecks[index].radarrStatus;
-            const releaseStatus = availabilityChecks[index].releaseStatus;
+            await safeDeleteMessage(selectionMsg, 'all seasons available');
             
-            let message = `💾 ${selected.title || selected.name} is already on our watchlist!`;
-            
-            if (status.queueStatus === 'downloading') {
-              message += '\n⬇️ It\'s currently downloading and will be available soon.';
-            } else if (releaseStatus === 'not_released') {
-              message += '\n🎬 It\'s still only in theaters and will be added when it releases for home viewing.';
-            } else {
-              message += '\n🔎 We\'re currently looking for a good quality copy to download.';
+            // Delete correction message if it exists
+            if (correctionMsg) {
+              await safeDeleteMessage(correctionMsg, 'request completed - already available');
             }
-            
-            const embed = createStatusEmbed(
-              selected,
-              message,
-              '#FFA500' // Orange for watchlist content
-            );
-            
-            await processingMsg.edit({ content: '', embeds: [embed] });
-            // Delete the search results message to keep the chat clean
-            await safeDeleteMessage(selectionMsg, 'movie on watchlist');
             return;
           }
 
-          // For TV shows, check which seasons are available and if show is already in Sonarr
-          if (selected.media_type === 'tv' && details.seasons?.length > 0) {
-            // Check if TV show is already in Sonarr
-            if (availabilityChecks[index].sonarrStatus?.exists) {
-              // Already in Sonarr but not downloaded yet
-              const status = availabilityChecks[index].sonarrStatus;
+          // Create request for show or movie
+          if (selected.media_type === 'tv') {
+            // Get the available seasons
+            const requestableSeasons = [];
+            
+            // For TV shows, we need to request which seasons are needed
+            for (let i = 1; i <= 50; i++) {  // Arbitrary limit to 50 seasons
+              // We'll check if the season exists and is not available
               
-              let message = `💾 ${selected.title || selected.name} is already on our watchlist!`;
+              const seasonAvailability = availability?.seasons?.find(s => s.seasonNumber === i);
               
-              if (status.isUpcoming) {
-                const firstAiredDate = status.firstAired ? 
-                  new Date(status.firstAired).toLocaleDateString() : 'an upcoming date';
-                message += `\n📅 It hasn't premiered yet and is scheduled to release on ${firstAiredDate}.`;
-              } else if (status.nextAiring) {
-                const nextAiringDate = new Date(status.nextAiring).toLocaleDateString();
-                message += `\n📅 The next episode is scheduled to air on ${nextAiringDate}.`;
-              } else {
-                message += '\n🔎 We\'re currently looking for episodes to download.';
+              // If we have no info about this season, assume we've reached the end of the show
+              if (!seasonAvailability && i > 1) break;
+              
+              // Add season if unavailable
+              if (!seasonAvailability || !seasonAvailability.available) {
+                requestableSeasons.push(i);
               }
-              
-              const embed = createStatusEmbed(
-                selected,
-                message,
-                '#FFA500' // Orange for watchlist content
-              );
-              
-              await processingMsg.edit({ content: '', embeds: [embed] });
-              // Delete the search results message to keep the chat clean
-              await safeDeleteMessage(selectionMsg, 'tv show on watchlist');
-              return;
             }
             
-            // Check available seasons for shows not already in Sonarr
-            const availableSeasons = new Set(
-              details.mediaInfo?.seasons?.map(s => s.seasonNumber) || []
-            );
-            
-            const requestableSeasons = details.seasons
-              .filter(season => season.seasonNumber > 0) // Filter out specials
-              .filter(season => !availableSeasons.has(season.seasonNumber))
-              .map(season => season.seasonNumber);
-
+            // If no seasons to request
             if (requestableSeasons.length === 0) {
               const embed = createStatusEmbed(
                 selected,
-                `✅ All seasons of ${selected.title || selected.name} are already available in Plex!`,
+                `✅ Good news! All seasons of ${selected.name} are already available in the library!`,
                 '#00FF00' // Green for available content
               );
               await processingMsg.edit({ content: '', embeds: [embed] });
               // Delete the search results message to keep the chat clean
               await safeDeleteMessage(selectionMsg, 'all seasons available');
+              
+              // Delete correction message if it exists
+              if (correctionMsg) {
+                await safeDeleteMessage(correctionMsg, 'request completed - all seasons available');
+              }
               return;
             }
 
@@ -487,6 +338,11 @@ You'll be notified when it's available.`,
           // Delete the search results message to keep the chat clean
           await safeDeleteMessage(selectionMsg, 'request submitted');
           
+          // Delete correction message if it exists
+          if (correctionMsg) {
+            await safeDeleteMessage(correctionMsg, 'request completed');
+          }
+          
         } catch (error) {
           console.error('Error processing request:', error);
           const errorEmbed = createStatusEmbed(
@@ -499,10 +355,20 @@ Please try again later.`,
           await processingMsg.edit({ content: '', embeds: [errorEmbed] });
           // Delete the search results message to keep the chat clean
           await safeDeleteMessage(selectionMsg, 'error processing');
+          
+          // Delete correction message if it exists
+          if (correctionMsg) {
+            await safeDeleteMessage(correctionMsg, 'request error');
+          }
         }
       } catch (error) {
         console.error('Error handling reaction:', error);
         await message.reply('An error occurred while processing your selection. Please try again.');
+        
+        // Delete correction message if it exists
+        if (correctionMsg) {
+          await safeDeleteMessage(correctionMsg, 'reaction error');
+        }
       }
     });
 
@@ -512,16 +378,21 @@ Please try again later.`,
         await message.reply('Search results timed out. Please try again.');
         // Delete the search results message on timeout to keep the chat clean
         await safeDeleteMessage(selectionMsg, 'request timeout');
-      } else if (reason === 'selected') {
-        // For successful selections, we'll also delete the search message after processing is done
-        // The deletion happens after the response message is sent (see below)
-      } else {
-        // For cancellations, we already deleted the message in the collect handler
+        
+        // Delete correction message if it exists
+        if (correctionMsg) {
+          await safeDeleteMessage(correctionMsg, 'request timeout');
+        }
       }
     });
 
   } catch (error) {
     console.error('Error handling request:', error);
     await message.reply('An error occurred while processing your request. Please try again later.');
+    
+    // Delete correction message if it exists
+    if (correctionMsg) {
+      await safeDeleteMessage(correctionMsg, 'general error');
+    }
   }
 }
