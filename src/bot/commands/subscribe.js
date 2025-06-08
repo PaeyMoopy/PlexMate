@@ -100,10 +100,23 @@ export async function handleSubscribe(message, query, correctionMsg = null) {
         }
         await suggestionMsg.react('❌');
         
-        // Create reaction collector
+        // Create reaction collector with improved emoji handling
         const suggestionFilter = (reaction, user) => {
-          const validReactions = ['1️⃣', '2️⃣', '3️⃣', '❌'].slice(0, suggestions.length + 1);
-          return validReactions.includes(reaction.emoji.name) && user.id === message.author.id;
+          // Add additional logging to debug emoji issues
+          console.log(`Subscribe - Filtering reaction: ${reaction.emoji.name} (${reaction.emoji.identifier}) from user ID ${user.id}`);
+          
+          // The array of valid number emojis (1-3) plus the cancel emoji
+          const validReactions = ['1️⃣', '2️⃣', '3️⃣'].slice(0, suggestions.length);
+          
+          // Handle the cancel emoji separately for more robust detection
+          const isValidNumberEmoji = validReactions.includes(reaction.emoji.name);
+          const isCancelEmoji = reaction.emoji.name === '❌' || reaction.emoji.identifier === '%E2%9D%8C';
+          
+          // Check if it's a valid reaction and from the correct user
+          const isValid = (isValidNumberEmoji || isCancelEmoji) && user.id === message.author.id;
+          console.log(`Subscribe - Reaction valid: ${isValid} (number: ${isValidNumberEmoji}, cancel: ${isCancelEmoji})`);
+          
+          return isValid;
         };
         
         const suggestionCollector = suggestionMsg.createReactionCollector({ 
@@ -113,12 +126,21 @@ export async function handleSubscribe(message, query, correctionMsg = null) {
         });
         
         suggestionCollector.on('collect', async (reaction) => {
-          // Handle suggestion selection
-          if (reaction.emoji.name === '❌') {
-            await safeDeleteMessage(suggestionMsg, 'suggestions cancelled');
-            await message.reply('Search cancelled.');
-            suggestionCollector.stop('cancelled');
-            return;
+          try {
+            console.log(`Subscribe - Reaction collected: ${reaction.emoji.name} by user ${reaction.users.cache.last()?.username}`);
+            
+            // Handle suggestion selection
+            if (reaction.emoji.name === '❌') {
+              console.log('Subscribe - Cancel reaction detected, processing cancellation');
+              await message.reply('Search cancelled.');
+              await safeDeleteMessage(suggestionMsg, 'suggestions cancelled');
+              suggestionCollector.stop('cancelled');
+              return;
+            }
+          } catch (error) {
+            console.error('Subscribe - Error handling reaction:', error);
+            await message.reply('There was an error processing your reaction. Please try again.');
+            suggestionCollector.stop('error');
           }
           
           // Get selected suggestion
