@@ -199,157 +199,33 @@ PlexMate supports a multi-channel setup for better organization and security:
 - Personalized Overseerr integration with user mapping
 - Local SQLite database for easy setup and maintenance
 
-## Quick Start
-
-### Option 1: Docker Deployment (Recommended)
-
-The easiest way to deploy PlexMate is using Docker. This method eliminates the need to install Node.js or PM2 on your system.
-
-#### Getting Started with Docker
+## Quick Start with Docker
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/PaeyMoopy/PlexMate.git
+# 1. Create a directory for PlexMate
+mkdir plexmate
+cd plexmate
 ```
 
 ```bash
-# 2. Navigate to project directory
-cd PlexMate
+# 2. Create docker-compose.yml and .env files (as shown in the Deployment Guide)
+# Use your favorite text editor to create these files
 ```
 
-#### Setting Up Environment Variables
-
-Create a `.env` file in the same directory as your `docker-compose.yml`. This file will contain all your sensitive configuration details:
+```bash
+# 3. Start the bot
+docker compose up -d
+```
 
 ```bash
-# Create a .env file with the following content (replace with your actual values):
-
-# Discord configuration
-DISCORD_TOKEN=your_discord_token_here
-ALLOWED_CHANNEL_ID=your_channel_id_here
-ADMIN_CHANNEL_ID=your_admin_channel_id_here
-
-# Overseerr configuration
-OVERSEERR_URL=https://your.overseerr.domain
-OVERSEERR_API_KEY=your_overseerr_api_key_here
-# User map format: {"overseerr_id":"discord_id", "overseerr_id2":"discord_id2"}
-OVERSEERR_USER_MAP={"1":"discord_user_id_1","2":"discord_user_id_2"}
-OVERSEERR_FALLBACK_ID=1
-
-# TMDB configuration
-TMDB_API_KEY=your_tmdb_api_key_here
-
-# Webhook configuration (optional - defaults to 5000)
-WEBHOOK_PORT=5000
-
-# Optional - Sonarr/Radarr configuration for enhanced status reporting
-# SONARR_URL=http://your-sonarr-instance:8989
-# SONARR_API_KEY=your_sonarr_api_key
-# RADARR_URL=http://your-radarr-instance:7878
-# RADARR_API_KEY=your_radarr_api_key
+# 4. View logs
+docker compose logs -f
 ```
 
 > **Notes on Environment Variables:**
 > - The `OVERSEERR_USER_MAP` must be valid JSON with the format `{"overseerr_id":"discord_id"}`
 > - Some variables like `WEBHOOK_PORT` and `OVERSEERR_FALLBACK_ID` have default values if not specified
 > - All environment variables referenced in `docker-compose.yml` will be loaded from your `.env` file
-
-#### Running the Docker Container
-
-```bash
-# Start the bot with Docker Compose
-docker compose up -d
-```
-
-```bash
-# View logs
-docker compose logs -f
-```
-
-```bash
-# Stop the bot
-docker compose down
-```
-
-If you make changes to your configuration in the `.env` file:
-
-```bash
-# Restart the container to apply changes
-docker compose restart
-```
-
-#### Using from Docker Hub (Coming Soon)
-
-Once the image is published to Docker Hub, you can use it directly:
-
-```bash
-# Pull the latest image
-docker pull pattymurph/plexmate:latest
-
-# Run with docker-compose using the image instead of building locally
-# (Edit docker-compose.yml to use 'image: pattymurph/plexmate:latest' instead of 'build: .')
-```
-
-### Option 2: Traditional Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/PaeyMoopy/PlexMate.git
-```
-```bash
-# 2. Navigate to project directory
-cd PlexMate
-```
-```bash
-# 3. Install dependencies
-npm install
-```
-```bash
-# 4. Run setup script (this will create .env template)
-npm run setup
-```
-# 5. Create .env with your credentials:
-```bash
-DISCORD_TOKEN=
-OVERSEERR_URL=
-OVERSEERR_API_KEY=
-TMDB_API_KEY=
-ALLOWED_CHANNEL_ID=
-ADMIN_CHANNEL_ID=
-OVERSEERR_USER_MAP=({"1":"123456789"},{"2":"987654321"})
-# Format: {"overseerr_user_id":"discord_user_id"}
-OVERSEERR_FALLBACK_ID=  # Default ID to use for requests when no mapping exists (defaults to 1 if not set)
-# Format: {"overseerr_user_id":"discord_user_id"}
-```
-```bash
-# 6. Start the bot with PM2
-npm run start:pm2
-```
-```bash
-# To view logs
-npx pm2 logs
-```
-```bash
-# To stop the bot
-npx pm2 stop all
-```
-
-## Setting Up Automatic Restart
-
-To ensure your bot restarts automatically after system reboots or crashes:
-
-```bash
-# Save the current PM2 process list
-npx pm2 save
-
-# Generate startup script (follow the instructions displayed)
-npx pm2 startup
-
-# Configure restart behavior (restarts up to 10 times on failure)
-npx pm2 restart plexmate --max-restarts 10
-```
-
-After running `npx pm2 startup`, PM2 will generate a command that you need to run with administrator privileges to complete the setup. Run this command, and your bot will automatically start when your system boots up.
 
 ## Creating a Discord Bot
 
