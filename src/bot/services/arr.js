@@ -23,17 +23,7 @@ class ArrService {
     this.radarrUrl = process.env.RADARR_URL;
     this.radarrApiKey = process.env.RADARR_API_KEY;
     
-    if (!this.sonarrUrl || !this.sonarrApiKey) {
-      console.warn('Sonarr not configured or environment variables not loaded. Related statistics features will be limited.');
-    } else {
-      console.log('Sonarr configured with URL:', this.sonarrUrl);
-    }
-    
-    if (!this.radarrUrl || !this.radarrApiKey) {
-      console.warn('Radarr not configured or environment variables not loaded. Related statistics features will be limited.');
-    } else {
-      console.log('Radarr configured with URL:', this.radarrUrl);
-    }
+    // Skip logging warnings for Sonarr/Radarr - these features are legacy and no longer in use
   }
 
   /**

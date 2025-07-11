@@ -77,13 +77,129 @@ export async function handleRequest(message, query, correctionMsg = null) {
     await message.reply('Please provide a title to search for!');
     return;
   }
-
+  
+  let selectionMsg = null; // Define this outside the try block so catch can access it
+  
   try {
     // Get max results from settings (default to 5 since localStorage isn't available in Node)
     const maxResults = 3;
 
-    // Search TMDB
-    const results = await searchTMDB(query);
+    // Extract if user specified a media type in parentheses
+    const typeMatch = query.match(/\((movie|tv)\)$/i);
+    let originalQuery = query;
+    let searchQuery = query;
+    let forcedMediaType = null;
+    
+    if (typeMatch) {
+      forcedMediaType = typeMatch[1].toLowerCase();
+      searchQuery = query.replace(/\((movie|tv)\)$/i, '').trim();
+    }
+    
+    // Search TMDB with the correctly parsed query (NOT the raw query with tags)
+    console.log(`Sending search request for "${searchQuery}" with forcedMediaType=${forcedMediaType}`);
+    let results = await searchTMDB(searchQuery, forcedMediaType);
+    
+    // Log the results for debugging
+    console.log(`TMDB returned ${results.length} results for query: "${query}"`);
+    console.log(`Media types in results: ${results.map(r => r.media_type).join(', ')}`);
+    
+    // Apply EXTREMELY strict media type filtering (no exceptions)
+    if (forcedMediaType) {
+      console.log(`Strictly filtering for media_type=${forcedMediaType} only`);
+      
+      // Only keep exact media type matches, no fallbacks
+      const filteredResults = results.filter(result => {
+        // Extra strict validation for each media type
+        if (forcedMediaType === 'tv') {
+          // For TV: must have media_type=tv AND have TV-specific properties
+          const isTvShow = result.media_type === 'tv' && 
+                         result.first_air_date !== undefined && 
+                         result.name !== undefined;
+          return isTvShow;
+        } else if (forcedMediaType === 'movie') {
+          // For movies: must have media_type=movie AND have movie-specific properties
+          const isMovie = result.media_type === 'movie' && 
+                        result.release_date !== undefined && 
+                        result.title !== undefined;
+          return isMovie;
+        }
+        return false;
+      });
+      
+      console.log(`After strict filtering: ${filteredResults.length} results remain`);
+      results = filteredResults;
+    }
+    
+    // If no results and we had a media type specified, DON'T show wrong media types
+    // Instead, check if there would have been results for the other media type
+    // and suggest those as alternatives without showing them directly
+    if (results.length === 0 && typeMatch) {
+      console.log(`No ${forcedMediaType} results found for "${query}", checking for other media types for suggestions only`);
+      
+      // Try without media type restriction, but only to offer suggestions
+      const generalResults = await searchTMDB(searchQuery);
+      
+      // Find results of the opposite media type
+      const otherMediaType = forcedMediaType === 'tv' ? 'movie' : 'tv';
+      const oppositeResults = generalResults.filter(result => result.media_type === otherMediaType);
+      
+      if (oppositeResults.length > 0) {
+        // There are results, but of the wrong media type
+        // Don't show these directly, but suggest them
+        console.log(`Found ${oppositeResults.length} results of type ${otherMediaType}, offering as suggestions only`);
+        
+        // Create a message to suggest trying the other media type
+        const suggestionType = otherMediaType === 'tv' ? 'TV shows' : 'movies';
+        const embed = new EmbedBuilder()
+          .setColor('#FFA500')
+          .setTitle(`No ${forcedMediaType === 'tv' ? 'TV shows' : 'movies'} found`)
+          .setDescription(
+            `I couldn't find any ${forcedMediaType === 'tv' ? 'TV shows' : 'movies'} matching "${searchQuery}"\n\n` +
+            `However, I found ${oppositeResults.length} ${suggestionType} with that name. ` +
+            `Try searching for "${searchQuery} (${otherMediaType})" instead if you're looking for ${suggestionType}.`
+          );
+        
+        await message.reply({ embeds: [embed] });
+        return; // End the command here
+      }
+      
+      // Otherwise, if there are no results of any media type, continue to the
+      // regular no-results handling below
+      if (forcedMediaType === 'tv') {
+        // Check if there are similarly named TV shows by adding a space
+        // (e.g., "Black Bird" instead of "Blackbird")
+        const wordParts = searchQuery.split(' ');
+        if (wordParts.length === 1 && wordParts[0].length > 6) {
+          // Single word query - try inserting a space in the middle
+          const middle = Math.floor(wordParts[0].length / 2);
+          const altQuery = wordParts[0].substring(0, middle) + ' ' + wordParts[0].substring(middle);
+          console.log(`Trying alternative query for TV: "${altQuery}"`);
+          const altResults = await searchTMDB(altQuery + ' (tv)');
+          if (altResults.length > 0) {
+            const altTvResults = altResults.filter(result => result.media_type === 'tv');
+            if (altTvResults.length > 0) {
+              // Show a message about the alternative search
+              const correctionMsg = await message.reply(`No TV shows found for "${searchQuery}". Did you mean "${altQuery}"? Here are the search results:`);
+              results = altTvResults;
+            }
+          }
+        }
+      }
+      
+      // If still no results with specific type, do NOT show all results
+      // We want strict filtering when a media type is specified
+      
+      // If still no results and title is one word, try with a space
+      if (results.length === 0 && !searchQuery.includes(' ')) {
+        console.log(`Trying with space: "${searchQuery.charAt(0)}${searchQuery.substring(1)}"`);
+        const spaceQuery = searchQuery.charAt(0) + ' ' + searchQuery.substring(1);
+        const spaceResults = await searchTMDB(spaceQuery);
+        
+        if (spaceResults.length > 0) {
+          results = spaceResults;
+        }
+      }
+    }
     
     if (results.length === 0) {
       // Get the current dynamic title list
@@ -192,24 +308,63 @@ export async function handleRequest(message, query, correctionMsg = null) {
       }
     }
 
-    // Create selection message with results
-    const embed = new EmbedBuilder()
+    // Create a message with search results header
+    const headerEmbed = new EmbedBuilder()
       .setColor('#0099ff')
-      .setTitle('Search Results')
-      .setDescription(`Found ${results.length} results for "${query}". React with the number of your selection, or ❌ to cancel.`)
-      .addFields(
-        results.slice(0, maxResults).map((result, index) => {
-          const title = result.title || result.name;
-          const year = getYear(result);
-          const type = result.media_type === 'movie' ? 'Movie' : 'TV Show';
-          return {
-            name: `${index + 1}. ${title} ${year}`,
-            value: `Type: ${type}\nOverview: ${result.overview ? (result.overview.length > 150 ? result.overview.substring(0, 150) + '...' : result.overview) : 'No overview available'}`
-          };
-        })
-      );
+      .setTitle(`Search Results`)
+      .setDescription(`Found ${results.length} results for "${query}". React with the number of your selection, or ❌ to cancel.`);
+    
+    // Create individual embeds for each result
+    const resultEmbeds = [];
+    resultEmbeds.push(headerEmbed);
+    
+    // First check availability for all results to avoid waiting during the display loop
+    const availabilityChecks = [];
+    for (let i = 0; i < Math.min(maxResults, results.length); i++) {
+      const result = results[i];
+      availabilityChecks.push(checkAvailability(result.media_type, result.id));
+    }
+    
+    // Wait for all availability checks to complete
+    const availabilityResults = await Promise.all(availabilityChecks);
+    
+    for (let i = 0; i < Math.min(maxResults, results.length); i++) {
+      const result = results[i];
+      const availability = availabilityResults[i];
+      const isAvailable = availability && availability.isAvailable;
+      
+      // Format result info
+      const title = result.media_type === 'tv' ? result.name : result.title;
+      const year = result.media_type === 'tv' 
+        ? (result.first_air_date ? ` (${result.first_air_date.substring(0, 4)})` : '') 
+        : (result.release_date ? ` (${result.release_date.substring(0, 4)})` : '');
+      const type = result.media_type === 'tv' ? 'TV Show' : 'Movie';
+      
+      const overview = result.overview 
+        ? (result.overview.length > 150 ? result.overview.substring(0, 150) + '...' : result.overview) 
+        : 'No overview available';
+      
+      // Add availability info to description
+      let description = `Type: ${type}\nOverview: ${overview}`;
+      
+      // Create individual embed for each result with its own poster
+      const resultEmbed = new EmbedBuilder()
+        .setColor(isAvailable ? '#00FF00' : '#0099ff') // Green for available content, blue for unavailable
+        .setTitle(`${i + 1}. ${title}${year}${isAvailable ? ' ✅' : ''}`)
+        .setDescription(isAvailable 
+          ? `✅ Already available in Plex!\nType: ${type}\nOverview: ${overview}` 
+          : description);
+        
+      // Add poster thumbnail for each result
+      if (result.poster_path) {
+        resultEmbed.setThumbnail(getPosterUrl(result.poster_path));
+      }
+      
+      resultEmbeds.push(resultEmbed);
+    }
 
-    const selectionMsg = await message.reply({ embeds: [embed] });
+    // Send a single message with multiple embeds
+    const selectionMsg = await message.reply({ embeds: resultEmbeds });
     
     // Add reaction options
     for (let i = 0; i < Math.min(maxResults, results.length); i++) {
@@ -250,24 +405,137 @@ export async function handleRequest(message, query, correctionMsg = null) {
           // Check availability
           const availability = await checkAvailability(selected.media_type, selected.id);
           
-          if (availability && availability.available) {
-            // Already available
+          // Handle different availability scenarios
+          if (availability && availability.isAvailable) {
+            // Fully available in Plex
             const embed = createStatusEmbed(
               selected,
               `✅ Good news! ${selected.title || selected.name} is already available in the library!`,
               '#00FF00' // Green for available content
             );
             await processingMsg.edit({ content: '', embeds: [embed] });
-            // Delete the search results message to keep the chat clean
             await safeDeleteMessage(selectionMsg, 'all seasons available');
             
-            // Delete correction message if it exists
             if (correctionMsg) {
               await safeDeleteMessage(correctionMsg, 'request completed - already available');
             }
-            
-            // Stop the collector to prevent timeout message
             collector.stop('selected');
+            return;
+          } 
+          // Media is in Sonarr/Radarr but not downloaded yet
+          else if ((availability.inSonarr || availability.inRadarr) && !availability.isAvailable) {
+            let statusMsg = '';
+            let color = '#FFA500'; // Orange for pending content
+            
+            // Not released yet (upcoming)
+            if (!availability.isReleased) {
+              if (selected.media_type === 'tv') {
+                const dateStr = availability.firstAired ? 
+                  new Date(availability.firstAired).toLocaleDateString() : 'soon';
+                statusMsg = `⏳ ${selected.name} has already been added to our library!
+
+We're waiting for it to be released on ${dateStr}. It will be downloaded automatically once available.\n\nWould you like to subscribe for notifications when it's ready?`;
+              } else {
+                let dateStr = 'soon';
+                if (availability.upcomingDigitalRelease) {
+                  dateStr = new Date(availability.upcomingDigitalRelease).toLocaleDateString();
+                }
+                statusMsg = `⏳ ${selected.title} has already been added to our library!
+
+We're waiting for the digital release on ${dateStr}. It will be downloaded automatically once available.\n\nWould you like to subscribe for notifications when it's ready?`;
+              }
+            } 
+            // Released but not downloaded yet
+            else {
+              if (availability.notAvailableReason === 'currently_downloading') {
+                statusMsg = `⏳ ${selected.title || selected.name} is currently downloading!
+
+It should be available soon. Would you like to subscribe for notifications when it's ready?`;
+              } else {
+                statusMsg = `⏳ ${selected.title || selected.name} has already been added to our library!
+
+It has been released, but we're still looking for a good quality version. Would you like to subscribe for notifications when it's ready?`;
+              }
+            }
+            
+            const embed = createStatusEmbed(selected, statusMsg, color);
+            await processingMsg.edit({ content: '', embeds: [embed] });
+            
+            // Add reaction options for subscription
+            await processingMsg.react('👍'); // Yes to subscribe
+            await processingMsg.react('👎'); // No to skip subscription
+            
+            // Create a reaction collector for subscription response
+            const subscriptionFilter = (reaction, user) => {
+              return ['👍', '👎'].includes(reaction.emoji.name) && user.id === message.author.id;
+            };
+            
+            const subscriptionCollector = processingMsg.createReactionCollector({
+              filter: subscriptionFilter,
+              time: 60000,
+              max: 1
+            });
+            
+            subscriptionCollector.on('collect', async (reaction) => {
+              try {
+                if (reaction.emoji.name === '👍') {
+                  // User wants to subscribe
+                  const success = await addSubscription(
+                    message.author.id.toString(),
+                    selected.id.toString(),
+                    selected.media_type,
+                    selected.title || selected.name,
+                    selected.media_type === 'tv' // episode_subscription is true for TV shows
+                  );
+                  
+                  if (success) {
+                    const subscribeEmbed = createStatusEmbed(
+                      selected,
+                      `✅ You've been subscribed to ${selected.title || selected.name}! You'll be notified when it becomes available.`,
+                      '#00FF00'
+                    );
+                    await processingMsg.edit({ embeds: [subscribeEmbed] });
+                  } else {
+                    const errorEmbed = createStatusEmbed(
+                      selected,
+                      `❌ There was an error creating your subscription. Please try again later.`,
+                      '#FF0000'
+                    );
+                    await processingMsg.edit({ embeds: [errorEmbed] });
+                  }
+                } else {
+                  // User doesn't want to subscribe
+                  const noSubEmbed = createStatusEmbed(
+                    selected,
+                    `No problem! ${selected.title || selected.name} is being processed, but you won't be notified.`,
+                    '#0099ff'
+                  );
+                  await processingMsg.edit({ embeds: [noSubEmbed] });
+                }
+              } catch (error) {
+                console.error('Error handling subscription reaction:', error);
+                await message.reply('An error occurred while processing your subscription choice.');
+              } finally {
+                await safeDeleteMessage(selectionMsg, 'subscription decision made');
+                if (correctionMsg) {
+                  await safeDeleteMessage(correctionMsg, 'subscription decision made');
+                }
+              }
+            });
+            
+            subscriptionCollector.on('end', async (_, reason) => {
+              if (reason === 'time') {
+                const timeoutEmbed = createStatusEmbed(
+                  selected,
+                  `Subscription choice timed out. ${selected.title || selected.name} is still being processed, but you won't be notified.`,
+                  '#0099ff'
+                );
+                await processingMsg.edit({ embeds: [timeoutEmbed] });
+              }
+            });
+            
+            // Stop the main collector
+            collector.stop('subscription_offered');
             return;
           }
 

@@ -19,19 +19,10 @@ export async function testApiKey() {
     const key = getApiKey();
     if (!key) return false;
 
-    console.log('Testing TMDB API key...');
     const testUrl = `${TMDB_BASE_URL}/movie/550?api_key=${key}`;
     
     const response = await fetch(testUrl);
-    if (response.ok) {
-      console.log('TMDB API key test successful!');
-      return true;
-    } else {
-      console.error(`TMDB API key test failed with status: ${response.status} ${response.statusText}`);
-      const errorBody = await response.text();
-      console.error('Error details:', errorBody);
-      return false;
-    }
+    return response.ok;
   } catch (error) {
     console.error('Error testing TMDB API key:', error.message);
     return false;
@@ -487,9 +478,15 @@ export async function searchTMDB(query, mediaType = null) {
       searchQuery = query.replace(/\((movie|tv)\)$/i, '').trim();
     }
 
+    // IMPORTANT: Always use the general multi-search endpoint first
+    // This gives us accurate media types for all results
+    // We'll filter strictly afterward based on these types
+    
     // Validate and encode search parameters
     const encodedQuery = encodeURIComponent(searchQuery);
-    const endpoint = forcedMediaType ? `search/${forcedMediaType}` : 'search/multi';
+    
+    // Always use search/multi to get accurate media types
+    const endpoint = 'search/multi'; 
     
     // Log the TMDB API key for debugging (first few chars + last few chars)
     const firstChars = TMDB_API_KEY.substring(0, 4);
@@ -534,16 +531,47 @@ export async function searchTMDB(query, mediaType = null) {
       return [];
     }
     
-    if (forcedMediaType) {
-      return data.results.map(result => ({
-        ...result,
-        media_type: forcedMediaType
-      }));
-    }
+    // Process and filter results based on media type
+    // We now filter AFTER getting results from search/multi
+    let processedResults = data.results;
     
-    return data.results.filter(result => 
+    // First, make sure each result has an accurate media_type
+    processedResults = processedResults.map(result => {
+      // Detect media type from properties if not explicitly set
+      const isTvShow = result.first_air_date !== undefined && result.name !== undefined;
+      const isMovie = result.release_date !== undefined && result.title !== undefined;
+      
+      // Only use the detected type if media_type is missing
+      if (!result.media_type) {
+        if (isTvShow) return { ...result, media_type: 'tv' };
+        if (isMovie) return { ...result, media_type: 'movie' };
+        return { ...result, media_type: 'unknown' };
+      }
+      
+      return result;
+    });
+    
+    // Filter out non-movie/TV results
+    processedResults = processedResults.filter(result => 
       result.media_type === 'movie' || result.media_type === 'tv'
     );
+    
+    // Apply strict filtering if a media type was forced
+    if (forcedMediaType) {
+      console.log(`TMDB strictly filtering for ${forcedMediaType} only`);
+      processedResults = processedResults.filter(result => {
+        if (forcedMediaType === 'tv') {
+          return result.media_type === 'tv';
+        } else if (forcedMediaType === 'movie') {
+          return result.media_type === 'movie';
+        }
+        return false;
+      });
+      
+      console.log(`After strict TMDB filtering: ${processedResults.length} results remain`);
+    }
+    
+    return processedResults;
   } catch (error) {
     console.error('Error searching TMDB:', error);
     throw new Error('Failed to search TMDB');
@@ -635,7 +663,6 @@ export async function getReleaseInfo(movieId) {
 
     return result;
   } catch (error) {
-    console.error('Error checking TMDB release dates:', error);
     return {
       hasDigitalRelease: false,
       hasPhysicalRelease: false,
@@ -693,7 +720,6 @@ export async function searchTMDBById(mediaId, mediaType) {
       media_type: mediaType
     };
   } catch (error) {
-    console.error('Error fetching media details by ID:', error);
     return null;
   }
 }
@@ -720,7 +746,6 @@ export async function checkOverseerr(tmdbId) {
     const data = await response.json();
     return data.results.some(result => result.mediaInfo?.status === 'available');
   } catch (error) {
-    console.error('Error checking Overseerr:', error);
     throw new Error('Failed to check media availability');
   }
 }

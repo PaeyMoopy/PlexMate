@@ -6,7 +6,6 @@ import { searchTMDB } from '../services/tmdb.js';
 import { EmbedBuilder } from 'discord.js';
 import { getSubscriptionByTitle, updateSubscription, removeSubscription } from '../services/database.js';
 import webhookService from '../services/webhooks.js';
-import tautulliService from '../services/tautulli.js';
 import * as database from '../services/database.js';
 import webhookRoutes from '../../routes/webhooks.js';
 
@@ -191,8 +190,7 @@ export function setupWebhookServer() {
         console.log('Raw metadata type:', metadataType);
         
         // Determine content type
-        // Tautulli types: 1 = movie, 2 = show/season, 3 = episode, 4 = episode
-        // {type} = dynamic value from Tautulli
+        // Media types: movie, show/season, episode
         // Plex types: "movie", "show", "episode"
         let contentType = 'unknown';
         
@@ -430,7 +428,7 @@ export function setupWebhookServer() {
                   }
                   
                   // Set new timer for immediate notification (1 second)
-                  // We don't need to wait for bundling since Tautulli already bundled them
+                  // Episodes are already bundled
                   notification.timer = setTimeout(() => {
                     sendBatchedNotification(sub.user_id, sub.media_id);
                   }, 1000);
@@ -512,9 +510,8 @@ export function setupWebhookServer() {
   app.listen(port, () => {
     console.log(`Webhook server listening on port ${port}`);
     console.log(`Webhook URLs:
-    - Plex/Tautulli: http://<your-server>:${port}/webhook
+    - Plex: http://<your-server>:${port}/webhook
     - Sonarr: http://<your-server>:${port}/api/webhooks/sonarr
-    - Radarr: http://<your-server>:${port}/api/webhooks/radarr
-    - Tautulli Events: http://<your-server>:${port}/api/webhooks/tautulli`);
+    - Radarr: http://<your-server>:${port}/api/webhooks/radarr`);
   });
 }

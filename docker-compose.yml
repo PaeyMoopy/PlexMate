@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  plexmate:
+    build: .
+    container_name: plexmate
+    restart: unless-stopped
+    ports:
+      - "${WEBHOOK_PORT:-5000}:5000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      # Required settings
+      - NODE_ENV=production
+      - TZ=UTC
+      - RUNNING_IN_DOCKER=true
+      # Bot configuration
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - ALLOWED_CHANNEL_ID=${ALLOWED_CHANNEL_ID}
+      - ADMIN_CHANNEL_ID=${ADMIN_CHANNEL_ID}
+      # Overseerr configuration
+      - OVERSEERR_URL=${OVERSEERR_URL}
+      - OVERSEERR_API_KEY=${OVERSEERR_API_KEY}
+      - OVERSEERR_USER_MAP=${OVERSEERR_USER_MAP}
+      - OVERSEERR_FALLBACK_ID=${OVERSEERR_FALLBACK_ID:-1}
+      # TMDB configuration
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      # Sonarr and Radarr configuration
+      - SONARR_URL=${SONARR_URL}
+      - SONARR_API_KEY=${SONARR_API_KEY}
+      - RADARR_URL=${RADARR_URL}
+      - RADARR_API_KEY=${RADARR_API_KEY}
+      # Webhook configuration
+      - WEBHOOK_PORT=${WEBHOOK_PORT:-5000}
+    networks:
+      - plexmate-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
+networks:
+  plexmate-network:
+    driver: bridge

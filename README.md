@@ -1,9 +1,19 @@
 # PlexMate
 
-A Discord bot for managing media requests and subscriptions with Plex and Overseerr integration.
+A Discord bot for managing media requests and subscriptions with Plex and Overseerr integration. Enhance your media server with easy request management, availability notifications, and user mapping.
 
-Using mapping you can enable users in Overseerr to recieve notifications when their requests are available, even if they didnt use "!request"!
+[![Docker](https://img.shields.io/badge/Docker-Available-blue)](https://hub.docker.com/r/pattymurph/plexmate)
+[![Discord](https://img.shields.io/badge/Discord-Bot-5865F2)](https://discord.com/developers/applications)
 
+## Features
+
+- Request movies and TV shows through Discord
+- Subscribe to media releases and get notifications when content is available
+- Intelligent availability detection with Sonarr/Radarr integration
+- Receive notifications for Plex webhook events
+- Get Discord notifications for Overseerr web requests
+- Personalized Overseerr integration with user mapping
+- Clean and intuitive interface with pagination and reactions
 
 Some Screenshots:
 
@@ -15,64 +25,272 @@ Some Screenshots:
 
 ![image](https://github.com/user-attachments/assets/9017eaeb-3c96-40bd-8a6f-c0c76175a731)
 
-## System Requirements
+## Prerequisites
 
-- **Node.js** (v18 or higher) - discord.js and several other dependencies require Node.js 18+
-- **npm** (v8 or higher, normally included with Node.js)
-- A Discord bot token
+- Docker and Docker Compose installed on your system
+- Discord bot token (instructions below)
 - Overseerr instance with API access
 - TMDB API key
+- Optional but recommended: Sonarr and Radarr instances for enhanced availability checking
 
-### Installing Node.js on Ubuntu
+## Deployment Guide
 
-If you're running Ubuntu or another Debian-based system, you may need to update your Node.js version:
+### Step 1: Create a Discord Bot
+
+Before setting up PlexMate, you need to create a Discord bot:
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click "New Application" and give your bot a name (e.g., "PlexMate")
+3. Navigate to the "Bot" tab and click "Add Bot"
+4. Under the "Privileged Gateway Intents" section, enable:
+   - MESSAGE CONTENT INTENT
+   - SERVER MEMBERS INTENT
+5. Copy your bot token (click "Reset Token" if needed)
+6. Navigate to "OAuth2" > "URL Generator"
+7. Select the following scopes:
+   - `bot`
+   - `applications.commands`
+8. Select the following bot permissions:
+   - Send Messages
+   - Read Message History
+   - Embed Links
+   - Add Reactions
+   - Read Message History
+9. Copy the generated URL and open it in your browser to add the bot to your server
+
+### Step 2: Get Required API Keys
+
+#### Overseerr API Key
+1. Log in to your Overseerr instance as an admin
+2. Go to Settings > General
+3. Create a new API key
+4. Copy the API key for use in your configuration
+
+#### TMDB API Key
+1. Create an account on [The Movie Database](https://www.themoviedb.org/)
+2. Go to your account settings > API
+3. Request an API key for developer use
+4. Copy your API key for use in your configuration
+
+### Step 3: Set Up Docker Deployment
+
+1. Create a directory for PlexMate:
+   ```bash
+   mkdir plexmate
+   cd plexmate
+   ```
+
+2. Create a `docker-compose.yml` file with the following content:
+   ```yaml
+   version: '3'
+   services:
+     plexmate:
+       image: pattymurph/plexmate:latest
+       container_name: plexmate
+       restart: unless-stopped
+       ports:
+         - "5000:5000"
+       volumes:
+         - ./data:/app/data
+       environment:
+         - TZ=America/New_York
+         - DISCORD_TOKEN=${DISCORD_TOKEN}
+         - ALLOWED_CHANNEL_ID=${ALLOWED_CHANNEL_ID}
+         - ADMIN_CHANNEL_ID=${ADMIN_CHANNEL_ID}
+         - OVERSEERR_URL=${OVERSEERR_URL}
+         - OVERSEERR_API_KEY=${OVERSEERR_API_KEY}
+         - OVERSEERR_USER_MAP=${OVERSEERR_USER_MAP}
+         - OVERSEERR_FALLBACK_ID=${OVERSEERR_FALLBACK_ID}
+         - TMDB_API_KEY=${TMDB_API_KEY}
+         - SONARR_URL=${SONARR_URL}
+         - SONARR_API_KEY=${SONARR_API_KEY}
+         - RADARR_URL=${RADARR_URL}
+         - RADARR_API_KEY=${RADARR_API_KEY}
+         - WEBHOOK_PORT=5000
+   ```
+
+3. Create a `.env` file in the same directory with your configuration:
+   ```
+   # Discord configuration
+   DISCORD_TOKEN=your_discord_token_here
+   ALLOWED_CHANNEL_ID=your_channel_id_here
+   ADMIN_CHANNEL_ID=your_admin_channel_id_here
+
+   # Overseerr configuration
+   OVERSEERR_URL=https://your.overseerr.domain
+   OVERSEERR_API_KEY=your_overseerr_api_key_here
+   # User map format: {"overseerr_id":"discord_id", "overseerr_id2":"discord_id2"}
+   OVERSEERR_USER_MAP={"1":"discord_user_id_1","2":"discord_user_id_2"}
+   OVERSEERR_FALLBACK_ID=1
+
+   # TMDB configuration
+   TMDB_API_KEY=your_tmdb_api_key_here
+
+   # Webhook configuration (optional)
+   WEBHOOK_PORT=5000
+
+   # Optional - Sonarr/Radarr configuration for enhanced status reporting
+   SONARR_URL=http://your-sonarr-instance:8989
+   SONARR_API_KEY=your_sonarr_api_key
+   RADARR_URL=http://your-radarr-instance:7878
+   RADARR_API_KEY=your_radarr_api_key
+   ```
+
+4. Start the PlexMate bot:
+   ```bash
+   docker compose up -d
+   ```
+
+5. View logs to verify everything is working:
+   ```bash
+   docker compose logs -f
+   ```
+
+## Managing Your PlexMate Instance
+
+### Updating PlexMate
 
 ```bash
-# Remove existing Node.js and related development packages (important to avoid conflicts)
-sudo apt-get purge -y nodejs npm libnode-dev
-sudo apt-get autoremove -y
+# Pull the latest image
+docker pull pattymurph/plexmate:latest
 
-# Add NodeSource repository for Node.js 18
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-
-# Install Node.js 18
-sudo apt-get install -y nodejs
-
-# Verify installation
-node -v  # Should show v18.x.x
-npm -v   # Should show compatible npm version
+# Restart the container with the new image
+docker compose down
+docker compose up -d
 ```
 
-Alternatively, you can use NVM (Node Version Manager) for easier Node.js version management:
+### Viewing Logs
 
 ```bash
-# Install NVM
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+# View logs in real-time
+docker compose logs -f
 
-# Close and reopen your terminal or source your profile
-source ~/.bashrc  # or source ~/.zshrc if using zsh
-
-# Install Node.js 18
-nvm install 18
-
-# Use Node.js 18
-nvm use 18
-
-# Verify installation
-node -v  # Should show v18.x.x
-npm -v  # Should show compatible npm version
+# View only the last 100 lines
+docker compose logs --tail=100
 ```
 
-## Features
+### Stopping PlexMate
 
-- Request movies and TV shows through Discord
-- Subscribe to media releases and get notifications
+```bash
+docker compose down
+```
+
+## Available Commands
+
+PlexMate supports the following commands in your Discord server:
+
+| Command | Description |
+|---------|-------------|
+| `!help` | Shows all available commands and their usage |
+| `!request [title] (movie|tv)` | Search and request movies or TV shows. Add (movie) or (tv) to filter results |
+| `!subscribe [title] [-e|-episode]` | Subscribe to get notified when content becomes available. Use -e or -episode flag for TV shows to get notifications for new episodes |
+| `!list` | View your current subscriptions |
+| `!unsubscribe` | Remove a subscription (supports pagination for users with many subscriptions) |
+| `!mapping` | Admin command to manage Discord to Overseerr user mappings (only available in admin channel) |
+
+## Multi-Channel Setup
+
+PlexMate supports a multi-channel setup for better organization and security:
+
+- **Regular Channel** (set by `ALLOWED_CHANNEL_ID`): All users can use standard commands
+- **Admin Channel** (set by `ADMIN_CHANNEL_ID`): Admin-only commands are restricted to this channel
 - Receive notifications for Plex webhook events
 - Get Discord notifications for Overseerr web requests
 - Personalized Overseerr integration with user mapping
 - Local SQLite database for easy setup and maintenance
 
 ## Quick Start
+
+### Option 1: Docker Deployment (Recommended)
+
+The easiest way to deploy PlexMate is using Docker. This method eliminates the need to install Node.js or PM2 on your system.
+
+#### Getting Started with Docker
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/PaeyMoopy/PlexMate.git
+```
+
+```bash
+# 2. Navigate to project directory
+cd PlexMate
+```
+
+#### Setting Up Environment Variables
+
+Create a `.env` file in the same directory as your `docker-compose.yml`. This file will contain all your sensitive configuration details:
+
+```bash
+# Create a .env file with the following content (replace with your actual values):
+
+# Discord configuration
+DISCORD_TOKEN=your_discord_token_here
+ALLOWED_CHANNEL_ID=your_channel_id_here
+ADMIN_CHANNEL_ID=your_admin_channel_id_here
+
+# Overseerr configuration
+OVERSEERR_URL=https://your.overseerr.domain
+OVERSEERR_API_KEY=your_overseerr_api_key_here
+# User map format: {"overseerr_id":"discord_id", "overseerr_id2":"discord_id2"}
+OVERSEERR_USER_MAP={"1":"discord_user_id_1","2":"discord_user_id_2"}
+OVERSEERR_FALLBACK_ID=1
+
+# TMDB configuration
+TMDB_API_KEY=your_tmdb_api_key_here
+
+# Webhook configuration (optional - defaults to 5000)
+WEBHOOK_PORT=5000
+
+# Optional - Sonarr/Radarr configuration for enhanced status reporting
+# SONARR_URL=http://your-sonarr-instance:8989
+# SONARR_API_KEY=your_sonarr_api_key
+# RADARR_URL=http://your-radarr-instance:7878
+# RADARR_API_KEY=your_radarr_api_key
+```
+
+> **Notes on Environment Variables:**
+> - The `OVERSEERR_USER_MAP` must be valid JSON with the format `{"overseerr_id":"discord_id"}`
+> - Some variables like `WEBHOOK_PORT` and `OVERSEERR_FALLBACK_ID` have default values if not specified
+> - All environment variables referenced in `docker-compose.yml` will be loaded from your `.env` file
+
+#### Running the Docker Container
+
+```bash
+# Start the bot with Docker Compose
+docker compose up -d
+```
+
+```bash
+# View logs
+docker compose logs -f
+```
+
+```bash
+# Stop the bot
+docker compose down
+```
+
+If you make changes to your configuration in the `.env` file:
+
+```bash
+# Restart the container to apply changes
+docker compose restart
+```
+
+#### Using from Docker Hub (Coming Soon)
+
+Once the image is published to Docker Hub, you can use it directly:
+
+```bash
+# Pull the latest image
+docker pull pattymurph/plexmate:latest
+
+# Run with docker-compose using the image instead of building locally
+# (Edit docker-compose.yml to use 'image: pattymurph/plexmate:latest' instead of 'build: .')
+```
+
+### Option 2: Traditional Installation
 
 ```bash
 # 1. Clone the repository
@@ -162,87 +380,6 @@ To connect to Overseerr:
 3. Create a new API key
 4. Copy the API key to your `.env` file as `OVERSEERR_API_KEY`
 5. Add your Overseerr URL to `.env` as `OVERSEERR_URL` (e.g., `https://overseerr.yourdomain.com`)
-
-## Tautulli Webhook Setup
-
-To receive notifications when new media is added to your Plex server, you need to configure Tautulli webhooks:
-
-1. Access your Tautulli web interface
-2. Go to Settings > Notification Agents
-3. Click "Add a new notification agent" and select "Webhook"
-4. Configure the webhook with the following settings:
-
-### Configuration Tab
-- **Webhook URL**: `http://your-server-ip:WEBHOOK_PORT/webhook` (replace with your server IP and the port specified in your .env file)
-- **Webhook Method**: POST
-- **Content Type**: application/json
-
-### Triggers Tab
-- Enable the **Recently Added** trigger
-
-### Conditions Tab (Optional)
-- Configure any additional filtering conditions if needed (e.g., specific libraries)
-
-### Data Tab
-- Under **JSON Data**, paste exactly the following:
-
-```json
-{
-  "event": "library.new",
-  "user": true,
-  "owner": true,
-  "Account": {
-    "id": "{user_id}",
-    "title": "{user}"
-  },
-  "Server": {
-    "title": "{server_name}",
-    "uuid": "{server_id}"
-  },
-  "Player": {
-    "local": true,
-    "publicAddress": "{public_ip}",
-    "title": "{player_name}",
-    "uuid": "{player_id}"
-  },
-  "Metadata": {
-    "librarySectionType": "{library_type}",
-    "ratingKey": "{rating_key}",
-    "key": "{key}",
-    "guid": "{guid}",
-    "librarySectionID": "{section_id}",
-    "type": "{type}",
-    "title": "{title}",
-    "grandparentTitle": "{grandparent_title}",
-    "parentTitle": "{parent_title}",
-    "summary": "{summary}",
-    "index": "{episode_num}",
-    "parentIndex": "{season_num}",
-    "year": "{year}",
-    "thumb": "{thumb}",
-    "art": "{art}",
-    "grandparentThumb": "{grandparent_thumb}",
-    "grandparentArt": "{grandparent_art}",
-    "addedAt": "{added_at}",
-    "updatedAt": "{updated_at}"
-  }
-}
-```
-
-> **IMPORTANT**: The JSON structure must match exactly as shown above for the webhook to work properly.
-
-5. Click "Save" to save your webhook configuration
-6. Test the webhook by adding a new media item to your Plex library or using Tautulli's test feature
-
-### Testing Your Webhook
-
-After setting up the webhook:
-1. In Tautulli, navigate to your configured webhook
-2. Click the "Test Notifications" button (bell icon)
-3. Select "Recently Added" from the dropdown menu
-4. Check the bot logs for webhook receipt confirmation: `npx pm2 logs`
-
-If configured correctly, the webhook should trigger the notification service in PlexMate.
 
 ## Setup Instructions
 
@@ -414,7 +551,9 @@ To backup your data, simply copy the `data/bot.db` file to a safe location.
 2. **Media requests failing**
    - Verify your Overseerr URL and API key are correct
    - Check that your TMDB API key is valid
-   - Look for errors in the bot logs: `npx pm2 logs`
+   - Look for errors in the logs:
+     - Docker: `docker compose logs -f`
+     - PM2: `npx pm2 logs`
 
 3. **User mapping not working**
    - Ensure OVERSEERR_USER_MAP is in valid JSON format
@@ -422,6 +561,13 @@ To backup your data, simply copy the `data/bot.db` file to a safe location.
    - Verify Discord user IDs are correct (enable Developer Mode in Discord settings to copy IDs)
 
 4. **Bot not starting automatically**
-   - On Linux, run `npx pm2 startup` and follow the instructions
-   - After starting the bot, run `npx pm2 save` to save the current process list
-   - Check the PM2 logs for any error messages: `npx pm2 logs`
+   - Docker: Make sure to include `restart: unless-stopped` in your docker-compose.yml
+   - PM2: Run `npx pm2 startup` and follow the instructions, then run `npx pm2 save`
+   - Check for error logs:
+     - Docker: `docker compose logs -f`
+     - PM2: `npx pm2 logs`
+
+5. **Docker container failing to start**
+   - Ensure your .env file is properly formatted and contains all required values
+   - Check container logs: `docker compose logs -f`
+   - Validate your volume paths in docker-compose.yml

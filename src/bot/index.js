@@ -29,17 +29,27 @@ async function startBot() {
     ];
 
     let envLoaded = false;
-    for (const path of envPaths) {
-      if (existsSync(path)) {
-        console.log(`Loading environment from: ${path}`);
-        config({ path });
-        envLoaded = true;
-        break;
+    
+    // Check if we're running in Docker environment
+    const isRunningInDocker = process.env.RUNNING_IN_DOCKER === 'true' || process.env.NODE_ENV === 'production';
+    
+    if (isRunningInDocker) {
+      console.log('Running in Docker environment, using provided environment variables');
+      envLoaded = true;
+    } else {
+      // Traditional .env file loading for local development
+      for (const path of envPaths) {
+        if (existsSync(path)) {
+          console.log(`Loading environment from: ${path}`);
+          config({ path });
+          envLoaded = true;
+          break;
+        }
       }
-    }
 
-    if (!envLoaded) {
-      console.log('Could not find .env file, attempting to load from process.env directly');
+      if (!envLoaded) {
+        console.log('Could not find .env file, attempting to load from process.env directly');
+      }
     }
 
     // Print all environment variables for debugging (mask sensitive ones)
@@ -53,48 +63,18 @@ async function startBot() {
     console.log('ADMIN_CHANNEL_ID: ' + process.env.ADMIN_CHANNEL_ID);
     console.log('OVERSEERR_USER_MAP: ' + process.env.OVERSEERR_USER_MAP);
     console.log('OVERSEERR_FALLBACK_ID: ' + (process.env.OVERSEERR_FALLBACK_ID || '1 (default)'));
-    console.log('TAUTULLI_URL: ' + process.env.TAUTULLI_URL);
-    console.log('TAUTULLI_API_KEY: ' + (process.env.TAUTULLI_API_KEY ? '********' : 'undefined'));
     console.log('SONARR_URL: ' + process.env.SONARR_URL);
     console.log('SONARR_API_KEY: ' + (process.env.SONARR_API_KEY ? '********' : 'undefined'));
     console.log('RADARR_URL: ' + process.env.RADARR_URL);
     console.log('RADARR_API_KEY: ' + (process.env.RADARR_API_KEY ? '********' : 'undefined'));
-    console.log('DOWNLOAD_CLIENT: ' + process.env.DOWNLOAD_CLIENT);
-    console.log('DOWNLOAD_CLIENT_URL: ' + process.env.DOWNLOAD_CLIENT_URL);
-    console.log('DOWNLOAD_CLIENT_USERNAME: ' + (process.env.DOWNLOAD_CLIENT_USERNAME ? '********' : 'undefined'));
-    console.log('DOWNLOAD_CLIENT_PASSWORD: ' + (process.env.DOWNLOAD_CLIENT_PASSWORD ? '********' : 'undefined'));
-    console.log('DOWNLOAD_CLIENT_API_KEY: ' + (process.env.DOWNLOAD_CLIENT_API_KEY ? '********' : 'undefined'));
-    console.log('QBITTORRENT_URL: ' + process.env.QBITTORRENT_URL);
-    console.log('QBITTORRENT_USERNAME: ' + (process.env.QBITTORRENT_USERNAME ? '********' : 'undefined'));
-    console.log('QBITTORRENT_PASSWORD: ' + (process.env.QBITTORRENT_PASSWORD ? '********' : 'undefined'));
-    console.log('DASHBOARD_UPDATE_INTERVAL: ' + process.env.DASHBOARD_UPDATE_INTERVAL);
     console.log('WEBHOOK_SECRET: ' + (process.env.WEBHOOK_SECRET ? '********' : 'undefined'));
     
     // Ensure environment variables are set using the correct URL format
     // Remove trailing slashes from URLs to prevent double slashes in API requests
-    if (process.env.SONARR_URL && process.env.SONARR_URL.endsWith('/')) {
-      process.env.SONARR_URL = process.env.SONARR_URL.slice(0, -1);
-      console.log('Normalized SONARR_URL:', process.env.SONARR_URL);
-    }
+    // Removed legacy Sonarr/Radarr URL normalization code (not used)
     
-    if (process.env.RADARR_URL && process.env.RADARR_URL.endsWith('/')) {
-      process.env.RADARR_URL = process.env.RADARR_URL.slice(0, -1);
-      console.log('Normalized RADARR_URL:', process.env.RADARR_URL);
-    }
+
     
-    if (process.env.DOWNLOAD_CLIENT_URL && process.env.DOWNLOAD_CLIENT_URL.endsWith('/')) {
-      process.env.DOWNLOAD_CLIENT_URL = process.env.DOWNLOAD_CLIENT_URL.slice(0, -1);
-      console.log('Normalized DOWNLOAD_CLIENT_URL:', process.env.DOWNLOAD_CLIENT_URL);
-    }
-    
-    // If using qBittorrent with generic variables, set the specific ones
-    if (process.env.DOWNLOAD_CLIENT?.toLowerCase() === 'qbittorrent' && 
-        !process.env.QBITTORRENT_URL && process.env.DOWNLOAD_CLIENT_URL) {
-      process.env.QBITTORRENT_URL = process.env.DOWNLOAD_CLIENT_URL;
-      process.env.QBITTORRENT_USERNAME = process.env.DOWNLOAD_CLIENT_USERNAME;
-      process.env.QBITTORRENT_PASSWORD = process.env.DOWNLOAD_CLIENT_PASSWORD;
-      console.log('Set QBITTORRENT variables from DOWNLOAD_CLIENT variables');
-    }
 
     // Validate required settings
     const requiredSettings = [
@@ -163,8 +143,7 @@ async function startBot() {
       setupWebhookServer();
       startRequestChecking(); // Start checking for Overseerr requests
       
-      // Initialize stats module for dashboard
-      // Initialize stats module (simplified version without dashboard)
+      // Initialize stats module
       await initStatsModule(client);
 
       // Check for updates on startup (silent, just logs to console)
@@ -237,7 +216,7 @@ async function startBot() {
       }
     });
 
-    // Stats button interactions have been removed as part of dashboard removal
+
 
     // Initial login
     await client.login(process.env.DISCORD_TOKEN);

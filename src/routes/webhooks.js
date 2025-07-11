@@ -1,7 +1,9 @@
 import express from 'express';
 import webhookService from '../bot/services/webhooks.js';
-import tautulliService from '../bot/services/tautulli.js';
 import * as database from '../bot/services/database.js';
+import os from 'os';
+import packageJson from '../../package.json' assert { type: 'json' };
+const { version } = packageJson;
 
 const router = express.Router();
 
@@ -47,82 +49,59 @@ router.post('/radarr', express.json(), async (req, res) => {
   }
 });
 
+
+
 /**
- * Route to handle Tautulli webhooks
- * This receives play, stop, pause, resume, etc. events from Tautulli
+ * Health check endpoint for container health monitoring
+ * Returns system status, uptime, memory usage, and version info
  */
-router.post('/tautulli', express.json(), async (req, res) => {
+router.get('/health', (req, res) => {
   try {
-    const { body } = req;
+    // Get system information
+    const uptime = process.uptime();
+    const memoryUsage = process.memoryUsage();
+    const systemMemory = {
+      total: os.totalmem(),
+      free: os.freemem(),
+      used: os.totalmem() - os.freemem()
+    };
     
-    // Check if valid payload
-    if (!body || !body.event) {
-      return res.status(400).json({ error: 'Invalid payload' });
-    }
+    // Format uptime as days, hours, minutes, seconds
+    const days = Math.floor(uptime / 86400);
+    const hours = Math.floor((uptime % 86400) / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+    const formattedUptime = `${days}d ${hours}h ${minutes}m ${seconds}s`;
     
-    // Process different event types
-    const event = body.event;
-    console.log(`Received Tautulli webhook: ${event}`);
-    
-    switch (event) {
-      case 'media.play':
-      case 'media.resume':
-        // Update active streams when media starts or resumes
-        if (body.session_id && body.user) {
-          database.upsertActiveStream(
-            body.session_id,
-            body.user,
-            body.full_title || body.title,
-            body.media_type,
-            body.progress_percent || 0,
-            body.quality || 'Unknown',
-            body.player || 'Unknown',
-            body.bandwidth || 0,
-            body.transcode_decision === 'transcode'
-          );
+    // Return health status and system info
+    res.status(200).json({
+      status: 'healthy',
+      version: version || '1.0.0',
+      uptime: formattedUptime,
+      memory: {
+        rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
+        heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
+        heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`
+      },
+      system: {
+        platform: os.platform(),
+        arch: os.arch(),
+        cpus: os.cpus().length,
+        memory: {
+          total: `${Math.round(systemMemory.total / 1024 / 1024)} MB`,
+          free: `${Math.round(systemMemory.free / 1024 / 1024)} MB`,
+          used: `${Math.round(systemMemory.used / 1024 / 1024)} MB`,
+          usedPercent: `${Math.round((systemMemory.used / systemMemory.total) * 100)}%`
         }
-        break;
-        
-      case 'media.stop':
-      case 'media.pause':
-        // Update active stream progress on pause/stop
-        if (body.session_id && body.user) {
-          database.upsertActiveStream(
-            body.session_id,
-            body.user,
-            body.full_title || body.title,
-            body.media_type,
-            body.progress_percent || 0,
-            body.quality || 'Unknown',
-            body.player || 'Unknown',
-            body.bandwidth || 0,
-            body.transcode_decision === 'transcode'
-          );
-        }
-        
-        // For stop event, add watch history
-        if (event === 'media.stop' && body.watched_status === 1) {
-          database.addWatchHistory(
-            body.user,
-            body.full_title || body.title,
-            body.media_type,
-            body.duration || 0,
-            body.player || 'Unknown',
-            body.quality || 'Unknown',
-            body.session_id
-          );
-        }
-        break;
-        
-      default:
-        // Ignore other event types
-        break;
-    }
-    
-    res.status(200).json({ status: 'success' });
+      },
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
-    console.error('Error processing Tautulli webhook:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error in health check endpoint:', error);
+    res.status(500).json({
+      status: 'error',
+      error: error.message
+    });
   }
 });
 

@@ -70,9 +70,50 @@ export async function handleSubscribe(message, query, correctionMsg = null) {
     // Check for episode subscription flag
     let isEpisodeSubscription = query.toLowerCase().includes('-e') || query.toLowerCase().includes('-episode');
     let searchQuery = query.replace(/(-e|-episode)(\s|$)/i, '').trim();
-
-    // Force TV search if episode subscription
-    const results = await searchTMDB(searchQuery, isEpisodeSubscription ? 'tv' : null);
+    
+    // Extract if user specified a media type in parentheses
+    const typeMatch = searchQuery.match(/\((movie|tv)\)$/i);
+    let forcedMediaType = null;
+    
+    if (typeMatch) {
+      forcedMediaType = typeMatch[1].toLowerCase();
+      searchQuery = searchQuery.replace(/\((movie|tv)\)$/i, '').trim();
+    }
+    
+    // Force TV search if episode subscription - episode subscriptions always require TV shows
+    let mediaTypeToForce = isEpisodeSubscription ? 'tv' : forcedMediaType;
+    let results = await searchTMDB(searchQuery, mediaTypeToForce);
+    
+    // Log the results for debugging
+    console.log(`TMDB returned ${results.length} results for subscribe query: "${searchQuery}"`);
+    console.log(`Media types in subscribe results: ${results.map(r => r.media_type).join(', ')}`);
+    
+    // Apply EXTREMELY strict media type filtering (no exceptions) - same logic as request.js
+    if (mediaTypeToForce) {
+      console.log(`Strictly filtering subscribe for media_type=${mediaTypeToForce} only`);
+      
+      // Only keep exact media type matches, no fallbacks
+      const filteredResults = results.filter(result => {
+        // Extra strict validation for each media type
+        if (mediaTypeToForce === 'tv') {
+          // For TV: must have media_type=tv AND have TV-specific properties
+          const isTvShow = result.media_type === 'tv' && 
+                         result.first_air_date !== undefined && 
+                         result.name !== undefined;
+          return isTvShow;
+        } else if (mediaTypeToForce === 'movie') {
+          // For movies: must have media_type=movie AND have movie-specific properties
+          const isMovie = result.media_type === 'movie' && 
+                        result.release_date !== undefined && 
+                        result.title !== undefined;
+          return isMovie;
+        }
+        return false;
+      });
+      
+      console.log(`After strict filtering: ${filteredResults.length} subscribe results remain`);
+      results = filteredResults;
+    }
     
     if (results.length === 0) {
       // Get the current dynamic title list
@@ -174,24 +215,41 @@ export async function handleSubscribe(message, query, correctionMsg = null) {
     }
 
     // Show search results
-    const searchResultsEmbed = new EmbedBuilder()
+    // Create a message with search results header
+    const headerEmbed = new EmbedBuilder()
       .setColor('#0099ff')
       .setTitle('Search Results')
-      .setDescription(`Found ${results.length} results for "${searchQuery}".\nReact with the number of your selection or ❌ to cancel.`)
-      .addFields(
-        ...results.slice(0, 5).map((result, index) => {
-          const title = result.title || result.name;
-          const date = result.release_date || result.first_air_date;
-          const year = date ? `(${date.substring(0, 4)})` : '';
-          const resultType = result.media_type === 'movie' ? 'Movie' : 'TV Show';
-          return {
-            name: `${index + 1}. ${title} ${year}`,
-            value: `Type: ${resultType}\nOverview: ${result.overview ? result.overview.substring(0, 100) + '...' : 'No overview available'}`
-          };
-        })
-      );
+      .setDescription(`Found ${results.length} results for "${searchQuery}".\nReact with the number of your selection or ❌ to cancel.`);
+    
+    // Create individual embeds for each result
+    const resultEmbeds = [];
+    resultEmbeds.push(headerEmbed);
+    
+    // Add each result with its own embed and thumbnail
+    for (let i = 0; i < Math.min(5, results.length); i++) {
+      const result = results[i];
+      const title = result.title || result.name;
+      const date = result.release_date || result.first_air_date;
+      const year = date ? `(${date.substring(0, 4)})` : '';
+      const resultType = result.media_type === 'movie' ? 'Movie' : 'TV Show';
+      const overview = result.overview ? result.overview.substring(0, 100) + '...' : 'No overview available';
+      
+      // Create individual embed for each result with its own poster
+      const resultEmbed = new EmbedBuilder()
+        .setColor('#0099ff')
+        .setTitle(`${i + 1}. ${title} ${year}`)
+        .setDescription(`Type: ${resultType}\nOverview: ${overview}`);
+        
+      // Add poster thumbnail for each result
+      if (result.poster_path) {
+        resultEmbed.setThumbnail(`https://image.tmdb.org/t/p/w500${result.poster_path}`);
+      }
+      
+      resultEmbeds.push(resultEmbed);
+    }
 
-    const selectionMsg = await message.reply({ embeds: [searchResultsEmbed] });
+    // Send a single message with multiple embeds
+    const selectionMsg = await message.reply({ embeds: resultEmbeds });
 
     // Add reaction options
     const maxResults = Math.min(results.length, 5);
