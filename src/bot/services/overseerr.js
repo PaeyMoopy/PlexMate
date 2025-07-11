@@ -21,8 +21,6 @@ function getOverseerrApiKey() {
 }
 
 function getUserMap() {
-  console.log('Raw OVERSEERR_USER_MAP:', process.env.OVERSEERR_USER_MAP);
-  
   const rawMap = process.env.OVERSEERR_USER_MAP;
   if (!rawMap) {
     console.error('OVERSEERR_USER_MAP is empty or undefined! Check your .env file.');
@@ -31,11 +29,6 @@ function getUserMap() {
   
   try {
     const userMap = JSON.parse(rawMap);
-    console.log('Loaded Overseerr user map:', {
-      raw: rawMap,
-      parsed: userMap,
-      type: typeof rawMap
-    });
     return userMap;
   } catch (error) {
     console.error('Failed to parse OVERSEERR_USER_MAP:', error);
@@ -52,38 +45,23 @@ function getOverseerId(discordId) {
   const userMap = getUserMap();
   const targetDiscordId = discordId?.toString();
   
-  console.log('Looking up Overseerr ID for Discord user:', targetDiscordId);
-  console.log('User map entries:', Object.entries(userMap));
-  console.log('User map keys:', Object.keys(userMap));
-  
   // Find Overseerr ID that maps to this Discord ID
   for (const [overseerId, mappedDiscordId] of Object.entries(userMap)) {
-    console.log(`Comparing: stored Discord ID "${mappedDiscordId}" (${typeof mappedDiscordId}) with target "${targetDiscordId}" (${typeof targetDiscordId})`);
     if (mappedDiscordId === targetDiscordId) {
-      console.log(`Found mapping: Discord ${targetDiscordId} -> Overseerr ${overseerId}`);
       return Number(overseerId);
     }
   }
   
   // Get fallback ID from environment variable or default to 1
-  const fallbackId = process.env.OVERSEERR_FALLBACK_ID ? 
+  return process.env.OVERSEERR_FALLBACK_ID ? 
     Number(process.env.OVERSEERR_FALLBACK_ID) : 1;
-  
-  console.log(`No mapping found, using fallback ID ${fallbackId}`);
-  return fallbackId;
 }
 
 // Get Discord ID from Overseerr ID (for notifications)
 export function getDiscordId(overseerId) {
   const userMap = getUserMap();
   const id = overseerId?.toString();
-  const discordId = userMap[id];
-  
-  console.log('Looking up Discord ID:', {
-    overseerId: id,
-    discordId: discordId || 'none'
-  });
-  return discordId;
+  return userMap[id];
 }
 
 async function getRadarrServers() {
@@ -137,7 +115,7 @@ export async function getMediaDetails(mediaType, mediaId) {
       return null;
     }
     
-    console.log(`[Overseerr] Fetching ${mediaType} details for ID ${mediaId}`);
+
     
     const response = await fetch(
       `${url}/api/v1/${mediaType}/${mediaId}`,
@@ -149,7 +127,6 @@ export async function getMediaDetails(mediaType, mediaId) {
     );
 
     if (!response.ok) {
-      console.error(`[Overseerr] Error fetching media details: ${response.status} ${response.statusText}`);
       return null;
     }
 
@@ -160,27 +137,165 @@ export async function getMediaDetails(mediaType, mediaId) {
   }
 }
 
+import { getReleaseInfo } from './tmdb.js';
+import arrService from './arr.js';
+
 export async function checkAvailability(mediaType, mediaId) {
   try {
     const details = await getMediaDetails(mediaType, mediaId);
+    let result = {
+      isAvailable: details.mediaInfo?.status === 5,
+      details,
+      notAvailableReason: null,
+      releaseStatus: null,
+      inSonarr: false,
+      inRadarr: false,
+      isReleased: true, // Default to true unless we determine it's unreleased
+      isUpcoming: false
+    };
     
-    // For TV shows, consider it available if Season 1 Episode 1 is available
+    // For TV shows, check Sonarr status and Season 1 Episode 1
     if (mediaType === 'tv') {
+      // Check if the show exists in Sonarr
+      const tvdbId = details.externalIds?.tvdbId;
+      if (tvdbId) {
+        const sonarrStatus = await arrService.checkSonarrShowStatus(tvdbId);
+        result.sonarrStatus = sonarrStatus;
+        
+        // Use Sonarr info to determine status
+        if (sonarrStatus.configured && sonarrStatus.exists) {
+          // Mark that it's in Sonarr regardless of download status
+          result.inSonarr = true;
+          
+          // Show is in Sonarr - check if any episodes exist
+          if (sonarrStatus.hasAnyEpisodes) {
+            // Has episodes downloaded - fully available
+            result.isAvailable = true;
+            console.log(`Show ${tvdbId} is available in Sonarr with episodes`); 
+          } else if (sonarrStatus.monitored) {
+            // Show is added to Sonarr and monitored but no episodes downloaded yet
+            result.isAvailable = false; // Changed to false to show appropriate message
+            result.notAvailableReason = 'in_sonarr_not_downloaded';
+            console.log(`Show ${tvdbId} is in Sonarr but not downloaded yet`);
+            
+            // Check if it's upcoming or already airing
+            if (sonarrStatus.isUpcoming) {
+              result.isUpcoming = true;
+              result.isReleased = false;
+              result.notAvailableReason = 'upcoming_release';
+              result.nextAiring = sonarrStatus.nextAiring;
+              result.firstAired = sonarrStatus.firstAired;
+              console.log(`Show ${tvdbId} is upcoming, not yet released`);
+            }
+          }
+        }
+      }
+      
+      // Still check Season 1 Episode 1 for backward compatibility
       const hasS1E1 = await checkIfS1E1Exists(details);
-      return {
-        isAvailable: hasS1E1 || details.mediaInfo?.status === 5,
-        details,
-        hasS1E1
-      };
+      result.hasS1E1 = hasS1E1;
+      
+      // If S1E1 exists, always mark as available
+      if (hasS1E1) {
+        result.isAvailable = true;
+        console.log(`Show has S1E1 available, marking as available`);
+      }
+      
+      // Final check with Overseerr status
+      if (details.mediaInfo?.status === 5) {
+        result.isAvailable = true;
+        console.log(`Show is available according to Overseerr status 5`);
+      }
+      
+      console.log(`Final availability for ${mediaType} ${mediaId}: ${result.isAvailable}`);
+      return result;
     }
     
-    return {
-      isAvailable: details.mediaInfo?.status === 5,
-      details
-    };
+    // For movies, check additional information
+    if (mediaType === 'movie') {
+      // Check if the movie has been downloaded in Radarr
+      const radarrStatus = await arrService.checkRadarrMovieStatus(mediaId);
+      result.radarrStatus = radarrStatus;
+      
+      // If Radarr is configured, check if the file has actually been downloaded
+      if (radarrStatus.configured) {
+        if (radarrStatus.exists) {
+          // Mark that it's in Radarr regardless of download status
+          result.inRadarr = true;
+          
+          if (!radarrStatus.hasFile) {
+            // Movie is in Radarr but not downloaded
+            result.isAvailable = false;
+            result.notAvailableReason = 'in_radarr_not_downloaded';
+            console.log(`Movie ${mediaId} is in Radarr but not downloaded yet`);
+            
+            // Check if it's actively downloading
+            if (radarrStatus.queueStatus === 'downloading') {
+              result.notAvailableReason = 'currently_downloading';
+              console.log(`Movie ${mediaId} is currently downloading`);
+            }
+          } else {
+            // Movie is in Radarr and has a file
+            result.isAvailable = true;
+            console.log(`Movie ${mediaId} is available in Radarr with downloaded file`);
+          }
+        }
+      }
+      
+      // Check TMDB for release date information
+      const releaseInfo = await getReleaseInfo(mediaId);
+      result.releaseInfo = releaseInfo;
+      
+      // Update release status flags based on releaseInfo
+      result.isReleased = releaseInfo.isReleased;
+      result.isUpcoming = !releaseInfo.isReleased;
+      
+      // If the movie is not available according to Overseerr/Radarr, check release status
+      if (!result.isAvailable) {
+        if (releaseInfo.isReleased) {
+          // Digital/physical release is available but not downloaded yet
+          result.releaseStatus = 'released_not_downloaded';
+          console.log(`Movie ${mediaId} is released but not downloaded yet`);
+          
+          if (releaseInfo.isDigitalReleased) {
+            result.digitalReleaseDate = releaseInfo.digitalReleaseDate;
+          }
+          
+          if (releaseInfo.isPhysicalReleased) {
+            result.physicalReleaseDate = releaseInfo.physicalReleaseDate;
+          }
+        } else {
+          // Not yet released digitally or physically
+          result.releaseStatus = 'not_released';
+          console.log(`Movie ${mediaId} is not released yet`);
+          
+          // Include upcoming release dates if available
+          if (releaseInfo.hasDigitalRelease) {
+            result.upcomingDigitalRelease = releaseInfo.digitalReleaseDate;
+          }
+          
+          if (releaseInfo.hasPhysicalRelease) {
+            result.upcomingPhysicalRelease = releaseInfo.physicalReleaseDate;
+          }
+        }
+      }
+      
+      // Final check with Overseerr status
+      if (details.mediaInfo?.status === 5) {
+        result.isAvailable = true;
+        console.log(`Movie is available according to Overseerr status 5`);
+      }
+      
+      console.log(`Final availability for ${mediaType} ${mediaId}: ${result.isAvailable}`);
+    }
+    
+    return result;
   } catch (error) {
     console.error('Error checking availability:', error);
-    throw error;
+    return {
+      isAvailable: false,
+      error: error.message
+    };
   }
 }
 
@@ -198,11 +313,9 @@ export async function checkIfS1E1Exists(mediaDetails) {
     // Check if episode 1 exists in season 1
     // This depends on the API response structure, but typically:
     if (season1.status === 5 || season1.episodes?.some(ep => ep.episodeNumber === 1 && ep.status === 5)) {
-      console.log('Season 1 Episode 1 is available');
       return true;
     }
     
-    console.log('Season 1 Episode 1 is NOT available');
     return false;
   } catch (error) {
     console.error('Error checking if S1E1 exists:', error);
@@ -212,14 +325,8 @@ export async function checkIfS1E1Exists(mediaDetails) {
 
 export async function createRequest({ mediaType, mediaId, userId }) {
   try {
-    // Get the user's Overseerr ID (or fallback to 6)
+    // Get the user's Overseerr ID
     const overseerId = getOverseerId(userId);
-    console.log('Creating request:', {
-      discordId: userId,
-      overseerId,
-      mediaType,
-      mediaId
-    });
     
     // Base request body
     const requestBody = {
@@ -228,8 +335,6 @@ export async function createRequest({ mediaType, mediaId, userId }) {
       userId: overseerId,
       is4k: false
     };
-
-    console.log('Request body:', requestBody);
 
     // Get server configurations
     let serverConfig;
@@ -280,10 +385,6 @@ export async function createRequest({ mediaType, mediaId, userId }) {
     );
 
     const responseText = await response.text();
-    console.log('Overseerr response:', {
-      status: response.status,
-      body: responseText
-    });
     
     if (!response.ok) {
       throw new Error(`Overseerr API error: ${response.status} - ${responseText}`);
@@ -293,15 +394,13 @@ export async function createRequest({ mediaType, mediaId, userId }) {
       // Parse response and track the request ID to prevent duplicate subscriptions
       const responseData = JSON.parse(responseText);
       
-      // If we have a request ID, save it to our tracking set
+      // Track bot-initiated request IDs to prevent duplicate subscriptions
       if (responseData && responseData.id) {
-        console.log(`[Bot Request] Tracking bot-initiated request ID: ${responseData.id}`);
         botInitiatedRequestIds.add(responseData.id);
       }
       
       return responseData;
     } catch (e) {
-      console.log('Response was not JSON:', responseText);
       return { success: true }; // Assume success if we got this far
     }
   } catch (error) {

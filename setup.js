@@ -74,6 +74,13 @@ async function main() {
       'TMDB_API_KEY',
     ];
     
+    const optionalVars = [
+      'SONARR_URL',
+      'SONARR_API_KEY',
+      'RADARR_URL',
+      'RADARR_API_KEY',
+    ];
+    
     const missingVars = requiredVars.filter(varName => !process.env[varName]);
     
     if (missingVars.length === 0) {
@@ -101,6 +108,19 @@ async function main() {
         } else {
           console.log(chalk.green(`✓ OVERSEERR_FALLBACK_ID is set to ${fallbackId}.`));
         }
+      }
+      
+      // Check Sonarr and Radarr configuration
+      if (!process.env.SONARR_URL || !process.env.SONARR_API_KEY) {
+        console.log(chalk.yellow('Note: Sonarr is not fully configured. Some TV show availability checks may be limited.'));
+      } else {
+        console.log(chalk.green('✓ Sonarr configuration detected.'));
+      }
+      
+      if (!process.env.RADARR_URL || !process.env.RADARR_API_KEY) {
+        console.log(chalk.yellow('Note: Radarr is not fully configured. Some movie availability checks may be limited.'));
+      } else {
+        console.log(chalk.green('✓ Radarr configuration detected.'));
       }
     } else {
       validateSpinner.warn({ text: `Missing required variables: ${missingVars.join(', ')}` });

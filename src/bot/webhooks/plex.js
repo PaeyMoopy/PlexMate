@@ -5,6 +5,9 @@ import { client } from '../index.js';
 import { searchTMDB } from '../services/tmdb.js';
 import { EmbedBuilder } from 'discord.js';
 import { getSubscriptionByTitle, updateSubscription, removeSubscription } from '../services/database.js';
+import webhookService from '../services/webhooks.js';
+import * as database from '../services/database.js';
+import webhookRoutes from '../../routes/webhooks.js';
 
 export function setupWebhookServer() {
   const app = express();
@@ -187,8 +190,7 @@ export function setupWebhookServer() {
         console.log('Raw metadata type:', metadataType);
         
         // Determine content type
-        // Tautulli types: 1 = movie, 2 = show/season, 3 = episode, 4 = episode
-        // {type} = dynamic value from Tautulli
+        // Media types: movie, show/season, episode
         // Plex types: "movie", "show", "episode"
         let contentType = 'unknown';
         
@@ -426,7 +428,7 @@ export function setupWebhookServer() {
                   }
                   
                   // Set new timer for immediate notification (1 second)
-                  // We don't need to wait for bundling since Tautulli already bundled them
+                  // Episodes are already bundled
                   notification.timer = setTimeout(() => {
                     sendBatchedNotification(sub.user_id, sub.media_id);
                   }, 1000);
@@ -491,9 +493,25 @@ export function setupWebhookServer() {
     }
   });
 
+  // Mount additional webhook routes
+  app.use('/api/webhooks', webhookRoutes);
+
+  // Add simple status endpoint
+  app.get('/status', (req, res) => {
+    res.status(200).json({
+      status: 'online',
+      time: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0'
+    });
+  });
+
   // Start server
   const port = process.env.WEBHOOK_PORT || 5000;
   app.listen(port, () => {
     console.log(`Webhook server listening on port ${port}`);
+    console.log(`Webhook URLs:
+    - Plex: http://<your-server>:${port}/webhook
+    - Sonarr: http://<your-server>:${port}/api/webhooks/sonarr
+    - Radarr: http://<your-server>:${port}/api/webhooks/radarr`);
   });
 }

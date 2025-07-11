@@ -5,9 +5,11 @@ import { handleList } from './commands/list.js';
 import { handleUnsubscribe } from './commands/unsubscribe.js';
 import { handleCommands } from './commands/commands.js';
 import { handleMapping } from './commands/mapping.js';
+import { handleStats, initStatsModule } from './commands/stats.js';
 import { checkForUpdates } from './commands/update.js';
 import { setupWebhookServer } from './webhooks/plex.js';
 import { startRequestChecking } from './services/overseerrRequests.js';
+import * as database from './services/database.js';
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
@@ -27,17 +29,27 @@ async function startBot() {
     ];
 
     let envLoaded = false;
-    for (const path of envPaths) {
-      if (existsSync(path)) {
-        console.log(`Loading environment from: ${path}`);
-        config({ path });
-        envLoaded = true;
-        break;
+    
+    // Check if we're running in Docker environment
+    const isRunningInDocker = process.env.RUNNING_IN_DOCKER === 'true' || process.env.NODE_ENV === 'production';
+    
+    if (isRunningInDocker) {
+      console.log('Running in Docker environment, using provided environment variables');
+      envLoaded = true;
+    } else {
+      // Traditional .env file loading for local development
+      for (const path of envPaths) {
+        if (existsSync(path)) {
+          console.log(`Loading environment from: ${path}`);
+          config({ path });
+          envLoaded = true;
+          break;
+        }
       }
-    }
 
-    if (!envLoaded) {
-      console.log('Could not find .env file, attempting to load from process.env directly');
+      if (!envLoaded) {
+        console.log('Could not find .env file, attempting to load from process.env directly');
+      }
     }
 
     // Print all environment variables for debugging (mask sensitive ones)
@@ -51,6 +63,18 @@ async function startBot() {
     console.log('ADMIN_CHANNEL_ID: ' + process.env.ADMIN_CHANNEL_ID);
     console.log('OVERSEERR_USER_MAP: ' + process.env.OVERSEERR_USER_MAP);
     console.log('OVERSEERR_FALLBACK_ID: ' + (process.env.OVERSEERR_FALLBACK_ID || '1 (default)'));
+    console.log('SONARR_URL: ' + process.env.SONARR_URL);
+    console.log('SONARR_API_KEY: ' + (process.env.SONARR_API_KEY ? '********' : 'undefined'));
+    console.log('RADARR_URL: ' + process.env.RADARR_URL);
+    console.log('RADARR_API_KEY: ' + (process.env.RADARR_API_KEY ? '********' : 'undefined'));
+    console.log('WEBHOOK_SECRET: ' + (process.env.WEBHOOK_SECRET ? '********' : 'undefined'));
+    
+    // Ensure environment variables are set using the correct URL format
+    // Remove trailing slashes from URLs to prevent double slashes in API requests
+    // Removed legacy Sonarr/Radarr URL normalization code (not used)
+    
+
+    
 
     // Validate required settings
     const requiredSettings = [
@@ -118,6 +142,9 @@ async function startBot() {
       console.log('PlexMate is ready!');
       setupWebhookServer();
       startRequestChecking(); // Start checking for Overseerr requests
+      
+      // Initialize stats module
+      await initStatsModule(client);
 
       // Check for updates on startup (silent, just logs to console)
       const updateInfo = await checkForUpdates();
@@ -171,6 +198,14 @@ async function startBot() {
               await message.reply('This command is only available in the admin channel.');
             }
             break;
+          case '!stats':
+            // Admin-only command - check if user is in admin channel
+            if (isAdminChannel) {
+              await handleStats(message, args.slice(1));
+            } else {
+              await message.reply('This command is only available in the admin channel.');
+            }
+            break;
           default:
             break;
         }
@@ -180,6 +215,8 @@ async function startBot() {
           .catch(console.error);
       }
     });
+
+
 
     // Initial login
     await client.login(process.env.DISCORD_TOKEN);

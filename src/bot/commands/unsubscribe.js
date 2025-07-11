@@ -1,5 +1,61 @@
 import { getSubscriptions, removeSubscription } from '../services/database.js';
 import { EmbedBuilder } from 'discord.js';
+import { searchTMDBById } from '../services/tmdb.js';
+
+/**
+ * Safely delete a message with retry
+ * @param {Object} msg - The Discord.js message to delete
+ * @param {string} context - Context for logging
+ */
+async function safeDeleteMessage(msg, context) {
+  if (!msg || !msg.id) {
+    console.log(`Skipping message deletion in context ${context}: Message reference invalid or null`);
+    return;
+  }
+
+  try {
+    // Check if we still have the message in Discord's cache
+    // If not, it might have been deleted already
+    if (!msg.channel.messages.cache.has(msg.id)) {
+      console.log(`Message already deleted or not in cache (context: ${context})`);
+      return;
+    }
+
+    // Add a slight delay before deletion to ensure Discord API is ready
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await msg.delete();
+    console.log(`Successfully deleted message in context: ${context}`);
+  } catch (error) {
+    if (error.code === 10008) { // Unknown Message error
+      console.log(`Message was already deleted (context: ${context})`);
+    } else {
+      console.error(`Failed to delete message in context ${context}:`, error);
+    }
+  }
+}
+
+/**
+ * Create a rich embed response with media details
+ * @param {Object} mediaItem - The media item data
+ * @param {string} statusMessage - Status message to display
+ * @param {string} color - Color for the embed (hex code)
+ * @param {boolean} isEpisodeSubscription - Whether this is an episode subscription
+ * @returns {EmbedBuilder} Discord.js embed
+ */
+function createStatusEmbed(mediaItem, statusMessage, color = '#0099ff', isEpisodeSubscription = false) {
+  const title = mediaItem.title || mediaItem.name;
+  const date = mediaItem.release_date || mediaItem.first_air_date;
+  const year = date ? `(${date.substring(0, 4)})` : '';
+  const fullTitle = `${title} ${year}`.trim();
+  
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(fullTitle)
+    .setURL(`https://www.themoviedb.org/${mediaItem.media_type}/${mediaItem.id}`)
+    .setDescription(statusMessage)
+    .setThumbnail(`https://image.tmdb.org/t/p/w500${mediaItem.poster_path}`)
+    .setFooter({ text: `Type: ${mediaItem.media_type} • ${isEpisodeSubscription ? 'Episode notifications enabled' : 'Release notification only'}` });
+}
 
 export async function handleUnsubscribe(message) {
   try {
@@ -97,7 +153,8 @@ export async function handleUnsubscribe(message) {
       // Handle cancel
       if (reaction.emoji.name === '❌') {
         await message.reply('Unsubscribe cancelled.');
-        collector.stop();
+        await safeDeleteMessage(selectionMsg, 'unsubscribe cancelled');
+        collector.stop('cancelled');
         return;
       }
 
@@ -114,22 +171,57 @@ export async function handleUnsubscribe(message) {
             const success = removeSubscription(message.author.id.toString(), selected.media_id);
             
             if (success) {
-              await message.reply(`You have been unsubscribed from "${selected.media_title}"!`);
+              // Delete the selection message
+              await safeDeleteMessage(selectionMsg, 'unsubscribe successful');
+              
+              try {
+                // Try to fetch media details from TMDB for rich embed
+                const mediaDetails = await searchTMDBById(selected.media_id, selected.media_type);
+                
+                if (mediaDetails) {
+                  const unsubscribeEmbed = createStatusEmbed(
+                    mediaDetails,
+                    `✅ ${message.author.username} has been unsubscribed from "${selected.media_title}"!`,
+                    '#00FF00', // Green for success
+                    selected.episode_subscription === 1
+                  );
+                  await message.reply({ embeds: [unsubscribeEmbed] });
+                } else {
+                  // Fallback if we can't get media details
+                  await message.reply(`✅ ${message.author.username} has been unsubscribed from "${selected.media_title}"!`);
+                }
+              } catch (error) {
+                console.error('Error fetching media details:', error);
+                // Fallback message if fetching details fails
+                await message.reply(`✅ ${message.author.username} has been unsubscribed from "${selected.media_title}"!`);
+              }
             } else {
-              await message.reply('An error occurred while removing your subscription.');
+              // Delete the selection message
+              await safeDeleteMessage(selectionMsg, 'unsubscribe error');
+              
+              const errorEmbed = new EmbedBuilder()
+                .setColor('#FF0000')
+                .setTitle('Unsubscribe Error')
+                .setDescription('❌ An error occurred while removing your subscription.');
+              await message.reply({ embeds: [errorEmbed] });
             }
           } catch (error) {
             console.error('Error removing subscription:', error);
             await message.reply('An error occurred while removing your subscription.');
           }
 
-          collector.stop();
+          collector.stop('selected');
         }
       }
     });
 
-    collector.on('end', () => {
-      selectionMsg.reactions.removeAll().catch(console.error);
+    collector.on('end', async (_, reason) => {
+      // Only show timeout message if it actually timed out
+      if (reason === 'time') {
+        await message.reply('Selection timed out. Please try again.');
+        // Delete the selection message on timeout
+        await safeDeleteMessage(selectionMsg, 'unsubscribe timeout');
+      }
     });
 
   } catch (error) {
