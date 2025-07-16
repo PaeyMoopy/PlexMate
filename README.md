@@ -257,7 +257,7 @@ PlexMate provides several commands for interacting with your media server:
   - Each page displays up to 5 subscriptions for easy navigation
 
 ### Utilities
-- `!commands` - List all available commands and their usage
+- `!help` - List all available commands and their usage
 
 ### User Mapping
 
