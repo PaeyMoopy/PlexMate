@@ -1,7 +1,7 @@
 # PlexMate
 
 A Discord bot for managing media requests and subscriptions with Plex and Overseerr integration. Enhance your media server with easy request management, availability notifications, and user mapping.
-
+<a href="https://www.paypal.com/ncp/payment/DKGKXXEYNDS7S" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 [![Docker](https://img.shields.io/badge/Docker-Available-blue)](https://hub.docker.com/r/pattymurph/plexmate)
 [![Discord](https://img.shields.io/badge/Discord-Bot-5865F2)](https://discord.com/developers/applications)
 
