@@ -12,7 +12,7 @@ A Discord bot for managing media requests and subscriptions with Plex and Overse
 - Request movies and TV shows through Discord
 - Subscribe to media releases and get notifications when content is available
 - Intelligent availability detection with Sonarr/Radarr integration
-- Receive notifications for Plex webhook events
+- Receive notifications for Plex webhook events via Tautulli
 - Get Discord notifications for Overseerr web requests
 - Personalized Overseerr integration with user mapping
 - Clean and intuitive interface with pagination and reactions
@@ -30,51 +30,13 @@ Some Screenshots:
 ## Prerequisites
 
 - Docker and Docker Compose installed on your system
-- Discord bot token (instructions below)
+- Discord bot token
 - Overseerr instance with API access
 - TMDB API key
 - Optional but recommended: Sonarr and Radarr instances for enhanced availability checking
+- Optional: Tautulli for Plex webhook notifications
 
-## Deployment Guide
-
-### Step 1: Create a Discord Bot
-
-Before setting up PlexMate, you need to create a Discord bot:
-
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" and give your bot a name (e.g., "PlexMate")
-3. Navigate to the "Bot" tab and click "Add Bot"
-4. Under the "Privileged Gateway Intents" section, enable:
-   - MESSAGE CONTENT INTENT
-   - SERVER MEMBERS INTENT
-5. Copy your bot token (click "Reset Token" if needed)
-6. Navigate to "OAuth2" > "URL Generator"
-7. Select the following scopes:
-   - `bot`
-   - `applications.commands`
-8. Select the following bot permissions:
-   - Send Messages
-   - Read Message History
-   - Embed Links
-   - Add Reactions
-   - Read Message History
-9. Copy the generated URL and open it in your browser to add the bot to your server
-
-### Step 2: Get Required API Keys
-
-#### Overseerr API Key
-1. Log in to your Overseerr instance as an admin
-2. Go to Settings > General
-3. Create a new API key
-4. Copy the API key for use in your configuration
-
-#### TMDB API Key
-1. Create an account on [The Movie Database](https://www.themoviedb.org/)
-2. Go to your account settings > API
-3. Request an API key for developer use
-4. Copy your API key for use in your configuration
-
-### Step 3: Set Up Docker Deployment
+## Deployment
 
 1. Create a directory for PlexMate:
    ```bash
@@ -190,68 +152,37 @@ PlexMate supports the following commands in your Discord server:
 | `!unsubscribe` | Remove a subscription (supports pagination for users with many subscriptions) |
 | `!mapping` | Admin command to manage Discord to Overseerr user mappings (only available in admin channel) |
 
+## Advanced Configuration
 
+### Multi-Channel Setup
 
-## Multi-Channel Setup
+PlexMate supports operating in multiple Discord channels:
 
-PlexMate supports a multi-channel setup for better organization and security:
+- **Regular Channel**: Set with `ALLOWED_CHANNEL_ID` - where most users interact with the bot
+- **Admin Channel**: Set with `ADMIN_CHANNEL_ID` - restricted to admins for configuration commands
 
-- **Regular Channel** (set by `ALLOWED_CHANNEL_ID`): All users can use standard commands
-- **Admin Channel** (set by `ADMIN_CHANNEL_ID`): Admin-only commands are restricted to this channel
-- Receive notifications for Plex webhook events
-- Get Discord notifications for Overseerr web requests
-- Personalized Overseerr integration with user mapping
-- Local SQLite database for easy setup and maintenance
+## Important Notes
 
-## Quick Start with Docker
+- The `OVERSEERR_USER_MAP` must be valid JSON with the format `{"overseerr_id":"discord_id"}`
+- Some variables like `WEBHOOK_PORT` and `OVERSEERR_FALLBACK_ID` have default values if not specified
+- All environment variables referenced in `docker-compose.yml` will be loaded from your `.env` file
 
-```bash
-# 1. Create a directory for PlexMate
-mkdir plexmate
-cd plexmate
-```
+## Service Setup
 
-```bash
-# 2. Create docker-compose.yml and .env files (as shown in the Deployment Guide)
-# Use your favorite text editor to create these files
-```
+### Discord Bot Setup
 
-```bash
-# 3. Start the bot
-docker compose up -d
-```
-
-```bash
-# 4. View logs
-docker compose logs -f
-```
-
-> **Notes on Environment Variables:**
-> - The `OVERSEERR_USER_MAP` must be valid JSON with the format `{"overseerr_id":"discord_id"}`
-> - Some variables like `WEBHOOK_PORT` and `OVERSEERR_FALLBACK_ID` have default values if not specified
-> - All environment variables referenced in `docker-compose.yml` will be loaded from your `.env` file
-
-## Creating a Discord Bot
-
-Before you can run this application, you need to create a Discord bot in the Discord Developer Portal:
+To create a Discord bot:
 
 1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
 2. Click "New Application" and give your bot a name
 3. Navigate to the "Bot" tab and click "Add Bot"
-4. Under the "Privileged Gateway Intents" section, enable:
-   - SERVER MEMBERS INTENT
-   - MESSAGE CONTENT INTENT
-5. Copy your bot token (click "Reset Token" if needed)
-6. Navigate to "OAuth2" > "URL Generator"
-7. Select the following scopes:
-   - `bot`
-   - `applications.commands`
-8. Select the following bot permissions:
-   - Administrator (or more specific permissions: Send Messages, Read Message History, Embed Links)
-9. Copy the generated URL and open it in your browser to add the bot to your server
-10. Use the token in your `.env` file as `DISCORD_TOKEN`
+4. Under "Privileged Gateway Intents", enable MESSAGE CONTENT INTENT and SERVER MEMBERS INTENT
+5. Copy your bot token for your `.env` file
+6. Navigate to "OAuth2" > "URL Generator", select `bot` and `applications.commands` scopes
+7. Select appropriate permissions: Send Messages, Read Message History, Embed Links, Add Reactions
+8. Use the generated URL to add the bot to your server
 
-## Overseerr API Setup
+### Overseerr API Setup
 
 To connect to Overseerr:
 
@@ -261,71 +192,25 @@ To connect to Overseerr:
 4. Copy the API key to your `.env` file as `OVERSEERR_API_KEY`
 5. Add your Overseerr URL to `.env` as `OVERSEERR_URL` (e.g., `https://overseerr.yourdomain.com`)
 
-## Setup Instructions
+### Tautulli Webhook Setup
 
-1. Clone the repository
-2. Run the setup script:
-   ```bash
-   npm run setup
-   ```
-3. Configure your `.env` file with required credentials (see Environment Variables section)
-4. Start the bot:
-   ```bash
-   npm start
-   ```
+To enable notifications when new content is available on your Plex server:
 
-The bot will automatically:
-- Create a `data` directory for the SQLite database
-- Initialize the database schema on first run
-- Check for updates on startup (silent, console-only)
+1. Log in to your Tautulli instance
+2. Go to Settings > Notification Agents
+3. Click "Add a new notification agent"
+4. Select "Webhook" as the agent
+5. Configure the webhook with these settings:
+   - **Webhook URL**: `http://<your-plexmate-server>:5000/webhook` (use your actual server IP or hostname)
+   - **Webhook Method**: POST
+   - **Content Type**: application/json
+   - **Trigger Options**: Enable "Recently Added"
+6. For each enabled trigger, click the gear icon and ensure JSON data is being sent
+7. Test the webhook to verify the connection
 
-## Multi-Channel Setup
+> **Note**: If you've changed the default webhook port in your `.env` file using `WEBHOOK_PORT`, make sure to use that port instead of the default 5000 in the webhook URL.
 
-PlexMate v1.0 introduces a multi-channel setup for better organization and security:
 
-### Regular Channel
-- Specified by `ALLOWED_CHANNEL_ID` in your `.env` file
-- All users can use standard commands like `!request`, `!subscribe`, etc.
-- Keeps media-related discussions in a dedicated channel
-
-### Admin Channel
-- Specified by `ADMIN_CHANNEL_ID` in your `.env` file
-- Admin-only commands like `!mapping` are only available in this channel
-- Uses Discord's built-in permission system to control access
-- Server admins can configure channel permissions to restrict who can use admin commands
-
-This design allows for better organization and security while simplifying bot configuration.
-
-## Automatic Updates
-
-PlexMate includes a built-in update system that checks for new versions from your GitHub repository:
-
-### Features
-- Silently checks for updates when the bot starts
-- No notifications are sent to Discord users
-- All updates are handled via command line
-
-### Commands
-```bash
-# Check if an update is available
-npm run update:check
-
-# Apply available updates automatically
-npm run update:apply
-```
-
-### Requirements
-- The bot must be installed via Git
-- Your repository must use semantic versioning in package.json
-- The repository must have the correct GitHub owner and name configured in `src/bot/commands/update.js`
-
-### Update Process
-When using `npm run update:apply`:
-1. Checks for new versions via GitHub releases API
-2. Performs `git pull` to fetch the latest code
-3. Runs `npm install` to install any new dependencies
-4. Logs the results to the console
-5. Requires a restart of the bot to apply changes
 
 ## Environment Variables
 
@@ -374,14 +259,14 @@ PlexMate provides several commands for interacting with your media server:
 ### Utilities
 - `!commands` - List all available commands and their usage
 
-## User Mapping
+### User Mapping
 
 PlexMate supports bi-directional integration with Overseerr:
 1. Discord users with Overseerr accounts can make requests using their Overseerr ID
 2. Overseerr web users can receive Discord notifications for their requests
 3. Users without mappings will still work using a fallback Overseerr ID
 
-### Admin Commands for Mapping
+#### Admin Commands for Mapping
 
 Authorized users can manage user mappings directly through Discord in the admin channel:
 
@@ -398,7 +283,7 @@ You can also configure mappings directly in your `.env` file:
 OVERSEERR_USER_MAP={"overseerr_id1":"discord_id1","overseerr_id2":"discord_id2"}
 ```
 
-### Fallback Overseerr ID
+#### Fallback Overseerr ID
 
 When a Discord user doesn't have a mapping to an Overseerr account, the bot uses a fallback ID to make requests. You can configure this with:
 
@@ -408,16 +293,9 @@ OVERSEERR_FALLBACK_ID=1  # Replace with your preferred default Overseerr user ID
 
 If not specified, it defaults to user ID 1, which is typically the admin account in Overseerr. Set this to an account that has appropriate request permissions.
 
-## Database
+### Database
 
-PlexMate uses a local SQLite database stored in `data/bot.db`. This provides:
-- Zero configuration required
-- Automatic setup and initialization
-- Easy backups (just copy the .db file)
-- Works offline
-- No external dependencies
-
-To backup your data, simply copy the `data/bot.db` file to a safe location.
+PlexMate uses a local SQLite database stored in `data/bot.db`, mounted as a volume in Docker. To backup your data, simply copy the `data/bot.db` file to a safe location.
 
 ## Troubleshooting
 
@@ -431,19 +309,14 @@ To backup your data, simply copy the `data/bot.db` file to a safe location.
 2. **Media requests failing**
    - Verify your Overseerr URL and API key are correct
    - Check that your TMDB API key is valid
-   - Look for errors in the logs:
-     - Docker: `docker compose logs -f`
+   - Look for errors with `docker compose logs -f`
 
 3. **User mapping not working**
    - Ensure OVERSEERR_USER_MAP is in valid JSON format
-   - Double-check that Overseerr user IDs match the ones in your Overseerr installation
-   - Verify Discord user IDs are correct (enable Developer Mode in Discord settings to copy IDs)
+   - Double-check Overseerr user IDs and Discord user IDs
 
-4. **Bot not starting automatically**
-   - Docker: Make sure to include `restart: unless-stopped` in your docker-compose.yml
-   - Check for error logs:
-     - Docker: `docker compose logs -f`
-5. **Docker container failing to start**
+4. **Docker container failing to start**
    - Ensure your .env file is properly formatted and contains all required values
-   - Check container logs: `docker compose logs -f`
+   - Check container logs with `docker compose logs -f`
    - Validate your volume paths in docker-compose.yml
+   - Make sure to include `restart: unless-stopped` in docker-compose.yml for automatic restarts
