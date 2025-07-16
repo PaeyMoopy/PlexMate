@@ -42,7 +42,7 @@ export async function handleCommands(message) {
   const version = getVersion();
   
   const embed = new EmbedBuilder()
-    .setTitle(`PlexMate Bot v${version}`)
+    .setTitle(`PlexMate v${version}`)
     .setDescription('Here are all the commands you can use:')
     .addFields([
       {
