@@ -433,7 +433,6 @@ To backup your data, simply copy the `data/bot.db` file to a safe location.
    - Check that your TMDB API key is valid
    - Look for errors in the logs:
      - Docker: `docker compose logs -f`
-     - PM2: `npx pm2 logs`
 
 3. **User mapping not working**
    - Ensure OVERSEERR_USER_MAP is in valid JSON format
@@ -442,11 +441,8 @@ To backup your data, simply copy the `data/bot.db` file to a safe location.
 
 4. **Bot not starting automatically**
    - Docker: Make sure to include `restart: unless-stopped` in your docker-compose.yml
-   - PM2: Run `npx pm2 startup` and follow the instructions, then run `npx pm2 save`
    - Check for error logs:
      - Docker: `docker compose logs -f`
-     - PM2: `npx pm2 logs`
-
 5. **Docker container failing to start**
    - Ensure your .env file is properly formatted and contains all required values
    - Check container logs: `docker compose logs -f`
