@@ -184,11 +184,12 @@ PlexMate supports the following commands in your Discord server:
 | Command | Description |
 |---------|-------------|
 | `!help` | Shows all available commands and their usage |
-| `!request [title] (movie&#124;tv)` | Search and request movies or TV shows. Add `(movie)` or `(tv)` to filter results |
-| `!subscribe [title] [-e&#124;-episode]` | Subscribe to get notified when content becomes available. Use `-e` or `-episode` flag for TV shows to get notifications for new episodes |
+| !request [title] (movie\|tv) | Search and request movies or TV shows. Add `(movie)` or `(tv)` to filter results |
+| !subscribe [title] [-e\|-episode] | Subscribe to get notified when content becomes available. Use `-e` or `-episode` flag for TV shows to get notifications for new episodes |
 | `!list` | View your current subscriptions |
 | `!unsubscribe` | Remove a subscription (supports pagination for users with many subscriptions) |
 | `!mapping` | Admin command to manage Discord to Overseerr user mappings (only available in admin channel) |
+
 
 
 ## Multi-Channel Setup
