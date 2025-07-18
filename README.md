@@ -1,6 +1,6 @@
 # PlexMate
 
-A Discord bot for managing media requests and subscriptions with Plex and Overseerr integration. Enhance your media server with easy request management, availability notifications, and user mapping.
+A Discord bot for managing media requests and subscriptions with Plex, Jellyfin, or Emby and Overseerr integration. Enhance your media server with easy request management, availability notifications, and user mapping.
 
 <a href="https://www.paypal.com/ncp/payment/DKGKXXEYNDS7S" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 
@@ -12,7 +12,7 @@ A Discord bot for managing media requests and subscriptions with Plex and Overse
 - Request movies and TV shows through Discord
 - Subscribe to media releases and get notifications when content is available
 - Intelligent availability detection with Sonarr/Radarr integration
-- Receive notifications for Plex webhook events via Tautulli
+- Flexible notification methods supporting both Plex (via Tautulli) and Jellyfin/Emby (via Sonarr/Radarr)
 - Get Discord notifications for Overseerr web requests
 - Personalized Overseerr integration with user mapping
 - Clean and intuitive interface with pagination and reactions
@@ -33,8 +33,8 @@ Some Screenshots:
 - Discord bot token
 - Overseerr instance with API access
 - TMDB API key
-- Optional but recommended: Sonarr and Radarr instances for enhanced availability checking
-- Optional: Tautulli for Plex webhook notifications
+- Sonarr and/or Radarr instances for availability checking and notifications
+- Optional: Tautulli for Plex webhook notifications (not required for Jellyfin/Emby users)
 
 ## Deployment
 
@@ -70,6 +70,8 @@ Some Screenshots:
          - SONARR_API_KEY=${SONARR_API_KEY}
          - RADARR_URL=${RADARR_URL}
          - RADARR_API_KEY=${RADARR_API_KEY}
+         - NOTIFICATION_METHOD=${NOTIFICATION_METHOD}
+         - MONITOR_INTERVAL=${MONITOR_INTERVAL}
          - WEBHOOK_PORT=5000
    ```
 
@@ -93,11 +95,17 @@ Some Screenshots:
    # Webhook configuration (optional)
    WEBHOOK_PORT=5000
 
-   # Optional - Sonarr/Radarr configuration for enhanced status reporting
+   # Sonarr/Radarr configuration (required for Jellyfin/Emby users, recommended for Plex users)
    SONARR_URL=http://your-sonarr-instance:8989
    SONARR_API_KEY=your_sonarr_api_key
    RADARR_URL=http://your-radarr-instance:7878
    RADARR_API_KEY=your_radarr_api_key
+   
+   # Notification method configuration
+   # Options: "tautulli" (Plex only), "arr" (Jellyfin/Emby), "both" (use both methods)
+   NOTIFICATION_METHOD=tautulli
+   # How often to check Sonarr/Radarr for completed downloads (in minutes)
+   MONITOR_INTERVAL=15
    ```
 
 4. Start the PlexMate bot:
@@ -232,7 +240,13 @@ OVERSEERR_FALLBACK_ID=  # Default ID to use for requests when no mapping exists 
 TMDB_API_KEY=           # Your TMDB API key
 
 # Webhook Configuration
-WEBHOOK_PORT=5000      # Port for Plex webhook server
+WEBHOOK_PORT=5000      # Port for webhook server (Plex/Tautulli, Sonarr, Radarr)
+
+# Notification Configuration
+# Options: "tautulli" (Plex only), "arr" (Jellyfin/Emby), or "both" (use both methods)
+NOTIFICATION_METHOD=tautulli  # Default is tautulli (Plex)
+# How often to check Sonarr/Radarr for completed downloads (in minutes)
+MONITOR_INTERVAL=15
 ```
 
 ## Bot Commands
@@ -297,6 +311,40 @@ If not specified, it defaults to user ID 1, which is typically the admin account
 
 PlexMate uses a local SQLite database stored in `data/bot.db`, mounted as a volume in Docker. To backup your data, simply copy the `data/bot.db` file to a safe location.
 
+## Jellyfin/Emby Support
+
+PlexMate now supports Jellyfin and Emby media servers through Sonarr/Radarr integration. This provides an alternative to the Tautulli-based notification system that only works with Plex.
+
+### Setting Up for Jellyfin/Emby
+
+1. Configure your `NOTIFICATION_METHOD` in your `.env` file:
+   ```env
+   # Use Sonarr/Radarr for notifications (best for Jellyfin/Emby)
+   NOTIFICATION_METHOD=arr
+   # Or use both methods if you have both Plex and Jellyfin/Emby
+   NOTIFICATION_METHOD=both
+   ```
+
+2. Ensure your Sonarr and Radarr instances are configured properly:
+   ```env
+   SONARR_URL=http://your-sonarr-instance:8989
+   SONARR_API_KEY=your_sonarr_api_key
+   RADARR_URL=http://your-radarr-instance:7878
+   RADARR_API_KEY=your_radarr_api_key
+   ```
+
+3. Optionally adjust how often PlexMate checks for completed downloads:
+   ```env
+   MONITOR_INTERVAL=15  # Minutes between checks
+   ```
+
+### How It Works
+
+- When set to `arr` mode, PlexMate will periodically check Sonarr and Radarr's history endpoints for recently imported content
+- When content is found that matches a user's subscription, a notification is sent to Discord
+- For TV shows, you'll be notified about specific episodes or new seasons depending on your subscription type
+- For movies, you'll receive a notification when the movie file is imported into Radarr
+
 ## Troubleshooting
 
 ### Common Issues
@@ -315,7 +363,12 @@ PlexMate uses a local SQLite database stored in `data/bot.db`, mounted as a volu
    - Ensure OVERSEERR_USER_MAP is in valid JSON format
    - Double-check Overseerr user IDs and Discord user IDs
 
-4. **Docker container failing to start**
+4. **Notifications not working with Jellyfin/Emby**
+   - Ensure your Sonarr/Radarr API keys and URLs are correct
+   - Set NOTIFICATION_METHOD to "arr" or "both" in your .env file
+   - Check logs for API connection errors with `docker compose logs -f`
+
+5. **Docker container failing to start**
    - Ensure your .env file is properly formatted and contains all required values
    - Check container logs with `docker compose logs -f`
    - Validate your volume paths in docker-compose.yml

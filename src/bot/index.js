@@ -10,6 +10,7 @@ import { checkForUpdates } from './commands/update.js';
 import { setupWebhookServer } from './webhooks/plex.js';
 import { startRequestChecking } from './services/overseerrRequests.js';
 import * as database from './services/database.js';
+import arrNotificationService from './services/arrNotificationService.js';
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
@@ -68,6 +69,8 @@ async function startBot() {
     console.log('RADARR_URL: ' + process.env.RADARR_URL);
     console.log('RADARR_API_KEY: ' + (process.env.RADARR_API_KEY ? '********' : 'undefined'));
     console.log('WEBHOOK_SECRET: ' + (process.env.WEBHOOK_SECRET ? '********' : 'undefined'));
+    console.log('NOTIFICATION_METHOD: ' + (process.env.NOTIFICATION_METHOD || 'tautulli (default)'));
+    console.log('MONITOR_INTERVAL: ' + (process.env.MONITOR_INTERVAL || '15 (default) minutes'));
     
     // Ensure environment variables are set using the correct URL format
     // Remove trailing slashes from URLs to prevent double slashes in API requests
@@ -140,8 +143,20 @@ async function startBot() {
 
     client.once(Events.ClientReady, async () => {
       console.log('PlexMate is ready!');
+      
+      // Set up webhook server for Tautulli and other services
       setupWebhookServer();
-      startRequestChecking(); // Start checking for Overseerr requests
+      
+      // Start checking for Overseerr requests
+      startRequestChecking();
+      
+      // Start monitoring Sonarr/Radarr based on configuration
+      const notificationMethod = process.env.NOTIFICATION_METHOD?.toLowerCase() || 'tautulli';
+      
+      if (notificationMethod === 'arr' || notificationMethod === 'both') {
+        console.log('Starting Sonarr/Radarr monitoring for media notifications...');
+        arrNotificationService.startMonitoring();
+      }
       
       // Initialize stats module
       await initStatsModule(client);
